@@ -38,10 +38,10 @@ namespace DarkUI.Controls
             {
                 // Darker colors:
                 // BackColor = isOdd ? Colors.MediumBackground : Colors.DarkBackground,
-                BackColor = isHeader ? Colors.MediumBackground :
+                BackColor = isHeader ? Colors.DarkBackground :
                         (isOdd ? Colors.GreyBackground : Colors.HeaderBackground),
                 ForeColor = Colors.LightText,
-                SelectionBackColor = isFocused ? Colors.BlueSelection : Colors.GreySelection,
+                SelectionBackColor = isFocused && isHeader? Colors.DarkBackground : Colors.BlueSelection,
                 SelectionForeColor = Colors.LightText,
             };
         }

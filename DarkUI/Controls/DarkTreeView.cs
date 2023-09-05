@@ -1054,7 +1054,7 @@ namespace DarkUI.Controls
                 if (node == dropNode)
                 {
                     if (isMoving)
-                        DarkMessageBox.Show(this, $"Cannot move {node.Text}. The destination folder is the same as the source folder.,", Application.ProductName, MessageBoxIcon.Error);
+                        DarkMessageBox.ShowError($"Cannot move {node.Text}. The destination folder is the same as the source folder.,", Application.ProductName, DarkDialogButton.Close);
 
                     return false;
                 }
@@ -1062,7 +1062,7 @@ namespace DarkUI.Controls
                 if (node.ParentNode != null && node.ParentNode == dropNode)
                 {
                     if (isMoving)
-                        DarkMessageBox.Show(this, $"Cannot move {node.Text}. The destination folder is the same as the source folder.", Application.ProductName, MessageBoxIcon.Error);
+                        DarkMessageBox.ShowError($"Cannot move {node.Text}. The destination folder is the same as the source folder.", Application.ProductName, DarkDialogButton.Close);
 
                     return false;
                 }
@@ -1073,7 +1073,7 @@ namespace DarkUI.Controls
                     if (node == parentNode)
                     {
                         if (isMoving)
-                            DarkMessageBox.Show(this, $"Cannot move {node.Text}. The destination folder is a subfolder of the source folder.", Application.ProductName, MessageBoxIcon.Error);
+                            DarkMessageBox.ShowError($"Cannot move {node.Text}. The destination folder is a subfolder of the source folder.", Application.ProductName, DarkDialogButton.Close);
 
                         return false;
                     }
