@@ -127,11 +127,17 @@ namespace DarkUI.Controls
 
                 foreach (var (_, _, items) in groups)
                 {
+                    string colName = colIdx >= 0 && colIdx < _base.Columns.Count
+                        ? _base.Columns[colIdx].Name : "";
                     items.Sort((a, b) =>
                     {
                         var va = a.Cells[colIdx].Value;
                         var vb = b.Cells[colIdx].Value;
-                        int cmp = Comparer<object>.Default.Compare(va, vb);
+                        int cmp;
+                        if (colName == "Size")
+                            cmp = CompareSizeStrings(va?.ToString(), vb?.ToString());
+                        else
+                            cmp = Comparer<object>.Default.Compare(va, vb);
                         return _sortAsc ? cmp : -cmp;
                     });
                 }
@@ -502,6 +508,28 @@ namespace DarkUI.Controls
                 count++;
             }
             return count;
+        }
+
+        private static int CompareSizeStrings(string a, string b)
+        {
+            long Parse(string s)
+            {
+                if (string.IsNullOrEmpty(s)) return 0;
+                var parts = s.Split(' ');
+                if (parts.Length != 2) return 0;
+                if (!double.TryParse(parts[0], System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out double val)) return 0;
+                return parts[1].ToUpperInvariant() switch
+                {
+                    "B" or "BYTES" => (long)val,
+                    "KB" => (long)(val * 1024),
+                    "MB" => (long)(val * 1024 * 1024),
+                    "GB" => (long)(val * 1024 * 1024 * 1024),
+                    "TB" => (long)(val * 1024L * 1024 * 1024 * 1024),
+                    _ => 0
+                };
+            }
+            return Parse(a).CompareTo(Parse(b));
         }
 
         // ── Collapse/expand ─────────────────────────────────────
