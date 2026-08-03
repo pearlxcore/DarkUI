@@ -547,6 +547,51 @@ namespace DarkUI.Controls
         public void ExpandAll() { SetAllGroups(false); }
         public void CollapseAll() { SetAllGroups(true); }
 
+        /// <summary>
+        /// Updates the value of a single cell in an item row (not a group header)
+        /// identified by the file path stored in the row's Tag.
+        /// </summary>
+        public void UpdateCellForPath(string filePath, int columnIndex, string newValue)
+        {
+            for (int r = 0; r < _base.Rows.Count; r++)
+            {
+                var row = _base.Rows[r];
+                if (row.Tag == null) continue;
+                var t = row.Tag.GetType();
+                var p = t.GetProperty("Path") ?? t.GetProperty("FilePath");
+                string path = p?.GetValue(row.Tag)?.ToString();
+                if (path == null) path = row.Tag.ToString();
+                if (!string.Equals(path, filePath, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (columnIndex >= 0 && columnIndex < row.Cells.Count)
+                    row.Cells[columnIndex].Value = newValue;
+                return;
+            }
+        }
+
+        /// <summary>
+        /// Returns the group-header row index that contains the given file path,
+        /// or -1 if not found.
+        /// </summary>
+        public int FindGroupForPath(string filePath)
+        {
+            for (int r = 0; r < _base.Rows.Count; r++)
+            {
+                var row = _base.Rows[r];
+                if (row.Tag == null) continue;
+                var t = row.Tag.GetType();
+                var p = t.GetProperty("Path") ?? t.GetProperty("FilePath");
+                string path = p?.GetValue(row.Tag)?.ToString();
+                if (string.Equals(path, filePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    for (int h = r - 1; h >= 0; h--)
+                        if (_groupRows.Contains(h))
+                            return h;
+                }
+            }
+            return -1;
+        }
+
         private void SetAllGroups(bool collapse)
         {
             foreach (int hdrIdx in _groupRows)
