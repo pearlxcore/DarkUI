@@ -1,547 +1,314 @@
-﻿using DarkUI.Config;
+using DarkUI.Config;
 using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Drawing;
-using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace DarkUI.Controls
 {
-    public class DarkListView : DarkScrollView
+    public class DarkListView : UserControl
     {
-        #region Event Region
+        private const int B = 1;
+        private readonly InnerList _list = new InnerList();
+        private readonly DarkScrollBar _vScrollBar = new DarkScrollBar { ScrollOrientation = DarkScrollOrientation.Vertical };
+        private readonly DarkScrollBar _hScrollBar = new DarkScrollBar { ScrollOrientation = DarkScrollOrientation.Horizontal };
+        private readonly Timer _deferTimer = new Timer { Interval = 500 };
+        private int _scrollSize => Consts.ScrollBarSize;
+        private bool _updateLayout;
+        private bool _layoutPending;
 
-        public event EventHandler SelectedIndicesChanged;
-
-        #endregion
-
-        #region Field Region
-
-        private int _itemHeight = 20;
-
-        private const int IconSize = 16;
-
-        private ObservableCollection<DarkListItem> _items;
-        private readonly List<int> _selectedIndices;
-        private int _anchoredItemStart = -1;
-        private int _anchoredItemEnd = -1;
-
-        #endregion
-
-        #region Property Region
-
-        [Browsable(false)]
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public ObservableCollection<DarkListItem> Items
+        private class InnerList : ListView
         {
-            get { return _items; }
-            set
+            [DllImport("user32.dll")] static extern bool ShowScrollBar(IntPtr hWnd, int wBar, bool show);
+            const int SB_BOTH = 3;
+            const int WM_VSCROLL = 0x115;
+            const int WM_HSCROLL = 0x114;
+            const int LVM_INSERTITEMW = 0x104D;
+            const int LVM_DELETEITEM = 0x1008;
+            const int LVM_DELETEALLITEMS = 0x1009;
+
+            public event Action ScrollStateChanged;
+            public event Action ItemsChanged;
+
+            protected override void WndProc(ref Message m)
             {
-                if (_items != null)
-                    _items.CollectionChanged -= Items_CollectionChanged;
-
-                _items = value;
-
-                _items.CollectionChanged += Items_CollectionChanged;
-
-                UpdateListBox();
+                base.WndProc(ref m);
+                if (!IsHandleCreated) return;
+                ShowScrollBar(Handle, SB_BOTH, false);
+                if (m.Msg == WM_VSCROLL || m.Msg == WM_HSCROLL)
+                    ScrollStateChanged?.Invoke();
+                else if (m.Msg == LVM_INSERTITEMW || m.Msg == LVM_DELETEITEM || m.Msg == LVM_DELETEALLITEMS)
+                    ItemsChanged?.Invoke();
             }
         }
 
-        [Browsable(false)]
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public List<int> SelectedIndices
-        {
-            get { return _selectedIndices; }
-        }
+        [DllImport("user32.dll")] static extern bool GetScrollInfo(IntPtr hWnd, int fnBar, ref SCROLLINFO lpsi);
+        [DllImport("user32.dll")] static extern int SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+        const int SB_VERT = 1;
+        const int SB_HORZ = 0;
+        const int SIF_ALL = 0x1 | 0x2 | 0x4;
+        const int LVM_SCROLL = 0x1014;
+        [StructLayout(LayoutKind.Sequential)] struct SCROLLINFO { public int cbSize, fMask, nMin, nMax, nPage, nPos, nTrackPos; }
 
-        [Category("Appearance")]
-        [Description("Determines the height of the individual list view items.")]
-        [DefaultValue(20)]
-        public int ItemHeight
-        {
-            get { return _itemHeight; }
-            set
-            {
-                _itemHeight = value;
-                UpdateListBox();
-            }
-        }
+        public ListView.ListViewItemCollection Items => _list.Items;
+        public ListView.SelectedListViewItemCollection SelectedItems => _list.SelectedItems;
+        public ListView.ColumnHeaderCollection Columns => _list.Columns;
+        public ImageList SmallImageList { get => _list.SmallImageList; set => _list.SmallImageList = value; }
+        public ImageList LargeImageList { get => _list.LargeImageList; set => _list.LargeImageList = value; }
+        public View View { get => _list.View; set => _list.View = value; }
+        public bool AllowDrop { get => _list.AllowDrop; set => _list.AllowDrop = value; }
+        public bool FullRowSelect { get => _list.FullRowSelect; set => _list.FullRowSelect = value; }
+        public bool MultiSelect { get => _list.MultiSelect; set => _list.MultiSelect = value; }
+        public new ContextMenuStrip ContextMenuStrip { get => _list.ContextMenuStrip; set => _list.ContextMenuStrip = value; }
+        public System.Collections.IComparer ListViewItemSorter { get => _list.ListViewItemSorter; set => _list.ListViewItemSorter = value; }
+        public bool UseCompatibleStateImageBehavior { get; set; }
+        public ListViewItem GetItemAt(int x, int y) => _list.GetItemAt(x, y);
 
-        [Category("Behaviour")]
-        [Description("Determines whether multiple list view items can be selected at once.")]
-        [DefaultValue(false)]
-        public bool MultiSelect { get; set; }
-
-        [Category("Appearance")]
-        [Description("Determines whether icons are rendered with the list items.")]
-        [DefaultValue(false)]
-        public bool ShowIcons { get; set; }
-
-        #endregion
-
-        #region Constructor Region
+        public event ColumnWidthChangingEventHandler ColumnWidthChanging;
+        public event EventHandler ItemActivate;
+        public event MouseEventHandler MouseDoubleClick;
+        public event ColumnClickEventHandler ColumnClick;
+        public event ItemDragEventHandler ItemDrag;
+        public event EventHandler SelectedIndexChanged;
+        public new event MouseEventHandler MouseClick;
+        public new event EventHandler DoubleClick;
 
         public DarkListView()
         {
-            Items = new ObservableCollection<DarkListItem>();
-            _selectedIndices = new List<int>();
-        }
+            base.BackColor = Colors.LightBorder;
+            _list.BorderStyle = BorderStyle.None;
+            _list.BackColor = Colors.GreyBackground;
+            _list.ForeColor = Colors.LightText;
+            _list.FullRowSelect = true;
+            _list.HideSelection = false;
+            _list.View = View.Details;
+            _list.OwnerDraw = true;
 
-        #endregion
-
-        #region Event Handler Region
-
-        private void Items_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
-        {
-            if (e.NewItems != null)
+            _list.DrawColumnHeader += (s, e) =>
             {
-                using (var g = CreateGraphics())
-                {
-                    // Set the area size of all new items
-                    foreach (DarkListItem item in e.NewItems)
-                    {
-                        item.TextChanged += Item_TextChanged;
-                        UpdateItemSize(item, g);
-                    }
-                }
+                int fillRight = e.Bounds.Right;
+                if (e.ColumnIndex == _list.Columns.Count - 1 && e.Bounds.Right < _list.ClientRectangle.Width)
+                    fillRight = _list.ClientRectangle.Width;
+                var fillBounds = new Rectangle(e.Bounds.X, e.Bounds.Y, fillRight - e.Bounds.X, e.Bounds.Height);
+                using var bg = new SolidBrush(Colors.DarkBackground);
+                e.Graphics.FillRectangle(bg, fillBounds);
+                using var hi = new Pen(Color.FromArgb(90, 95, 100));
+                e.Graphics.DrawLine(hi, e.Bounds.Left, e.Bounds.Top, e.Bounds.Right - 1, e.Bounds.Top);
+                e.Graphics.DrawLine(hi, e.Bounds.Left, e.Bounds.Top, e.Bounds.Left, e.Bounds.Bottom - 1);
+                using var sh = new Pen(Colors.DarkBorder);
+                e.Graphics.DrawLine(sh, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right - 1, e.Bounds.Bottom - 1);
+                e.Graphics.DrawLine(sh, e.Bounds.Right - 1, e.Bounds.Top, e.Bounds.Right - 1, e.Bounds.Bottom - 1);
+                var tr = new Rectangle(e.Bounds.X + 3, e.Bounds.Y, e.Bounds.Width - 6, e.Bounds.Height);
+                TextRenderer.DrawText(e.Graphics, e.Header.Text, Font, tr, Colors.LightText,
+                    TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter | TextFormatFlags.EndEllipsis);
+            };
+            _list.DrawItem += (s, e) => { e.DrawDefault = true; };
+            _list.DrawSubItem += (s, e) => { e.DrawDefault = true; };
 
-                // Find the starting index of the new item list and update anything past that
-                if (e.NewStartingIndex < Items.Count - 1)
-                {
-                    for (var i = e.NewStartingIndex; i <= Items.Count - 1; i++)
-                    {
-                        UpdateItemPosition(Items[i], i);
-                    }
-                }
-            }
+            _list.ColumnWidthChanging += (s, e) => ColumnWidthChanging?.Invoke(this, e);
+            _list.ColumnWidthChanged += (s, e) => UpdateScrollBarLayout();
+            _list.ItemActivate += (s, e) => ItemActivate?.Invoke(this, e);
+            _list.MouseClick += (s, e) => MouseClick?.Invoke(this, e);
+            _list.MouseDoubleClick += (s, e) => MouseDoubleClick?.Invoke(this, e);
+            _list.DoubleClick += (s, e) => DoubleClick?.Invoke(this, e);
+            _list.ColumnClick += (s, e) => ColumnClick?.Invoke(this, e);
+            _list.ItemDrag += (s, e) => ItemDrag?.Invoke(this, e);
+            _list.SelectedIndexChanged += (s, e) => SelectedIndexChanged?.Invoke(this, e);
 
-            if (e.OldItems != null)
+            _list.ScrollStateChanged += () =>
             {
-                foreach (DarkListItem item in e.OldItems)
-                    item.TextChanged -= Item_TextChanged;
+                if (!_updateLayout && IsHandleCreated)
+                    UpdateScrollBarLayout();
+            };
 
-                // Find the starting index of the old item list and update anything past that
-                if (e.OldStartingIndex < Items.Count - 1)
-                {
-                    for (var i = e.OldStartingIndex; i <= Items.Count - 1; i++)
-                    {
-                        UpdateItemPosition(Items[i], i);
-                    }
-                }
-            }
+            _list.ItemsChanged += () => ScheduleLayout();
 
-            if (Items.Count == 0)
+            _list.MouseWheel += (s, e) =>
             {
-                if (_selectedIndices.Count > 0)
+                if (ModifierKeys.HasFlag(Keys.Shift))
                 {
-                    _selectedIndices.Clear();
-
-                    SelectedIndicesChanged?.Invoke(this, null);
+                    if (_hScrollBar.Visible)
+                        _hScrollBar.Value = Math.Max(0, Math.Min(_hScrollBar.Maximum,
+                            _hScrollBar.Value - Math.Sign(e.Delta)));
                 }
-            }
-
-            UpdateContentSize();
-        }
-
-        private void Item_TextChanged(object sender, EventArgs e)
-        {
-            var item = (DarkListItem)sender;
-
-            UpdateItemSize(item);
-            UpdateContentSize(item);
-            Invalidate();
-        }
-
-        protected override void OnMouseDown(MouseEventArgs e)
-        {
-            base.OnMouseDown(e);
-
-            if (Items.Count == 0)
-                return;
-
-            if (e.Button != MouseButtons.Left && e.Button != MouseButtons.Right)
-                return;
-
-            var pos = OffsetMousePosition;
-
-            var range = ItemIndexesInView().ToList();
-
-            var top = range.Min();
-            var bottom = range.Max();
-            var width = Math.Max(ContentSize.Width, Viewport.Width);
-
-            for (var i = top; i <= bottom; i++)
-            {
-                var rect = new Rectangle(0, i * ItemHeight, width, ItemHeight);
-
-                if (!rect.Contains(pos))
-                    continue;
-
-                if (MultiSelect && ModifierKeys == Keys.Shift)
-                    SelectAnchoredRange(i);
-                else if (MultiSelect && ModifierKeys == Keys.Control)
-                    ToggleItem(i);
                 else
-                    SelectItem(i);
-            }
+                {
+                    if (_vScrollBar.Visible)
+                        _vScrollBar.Value = Math.Max(0, Math.Min(_vScrollBar.Maximum,
+                            _vScrollBar.Value - Math.Sign(e.Delta)));
+                }
+            };
+
+            _vScrollBar.BackColor = Colors.MediumBackground;
+            _vScrollBar.Minimum = 0; _vScrollBar.Maximum = 100;
+            _vScrollBar.ValueChanged += (s, e) =>
+            {
+                if (!_list.IsHandleCreated || _updateLayout || _list.Items.Count == 0) return;
+                _updateLayout = true;
+                int idx = Math.Max(0, Math.Min(_list.Items.Count - 1, e.Value));
+                _list.TopItem = _list.Items[idx];
+
+                SCROLLINFO hsi = new SCROLLINFO { cbSize = Marshal.SizeOf<SCROLLINFO>(), fMask = SIF_ALL };
+                GetScrollInfo(_list.Handle, SB_HORZ, ref hsi);
+                int delta = _hScrollBar.Value - hsi.nPos;
+                if (delta != 0)
+                    SendMessage(_list.Handle, LVM_SCROLL, (IntPtr)delta, IntPtr.Zero);
+
+                _updateLayout = false;
+            };
+
+            _hScrollBar.BackColor = Colors.MediumBackground;
+            _hScrollBar.Minimum = 0; _hScrollBar.Maximum = 100;
+            _hScrollBar.ValueChanged += (s, e) =>
+            {
+                if (!_list.IsHandleCreated || _updateLayout) return;
+                _updateLayout = true;
+                SCROLLINFO cur = new SCROLLINFO { cbSize = Marshal.SizeOf<SCROLLINFO>(), fMask = SIF_ALL };
+                GetScrollInfo(_list.Handle, SB_HORZ, ref cur);
+                int delta = e.Value - cur.nPos;
+                if (delta != 0)
+                    SendMessage(_list.Handle, LVM_SCROLL, (IntPtr)delta, IntPtr.Zero);
+                _updateLayout = false;
+            };
+
+            _deferTimer.Tick += (s, e) =>
+            {
+                _deferTimer.Stop();
+                if (!Disposing && IsHandleCreated) UpdateScrollBarLayout();
+            };
+
+            Controls.Add(_list);
+            Controls.Add(_vScrollBar);
+            Controls.Add(_hScrollBar);
+
+            UpdateScrollBarLayout();
+
+            SizeChanged += (s, e) =>
+            {
+                if (ClientSize.Width > 50 && ClientSize.Height > 50)
+                {
+                    UpdateScrollBarLayout();
+                    _deferTimer.Stop();
+                    _deferTimer.Start();
+                }
+            };
+
+            EventHandler idle = null;
+            idle = (s, e) => { Application.Idle -= idle; if (!Disposing && IsHandleCreated) UpdateScrollBarLayout(); };
+            Application.Idle += idle;
         }
 
-        protected override void OnKeyDown(KeyEventArgs e)
+        protected override void Dispose(bool disposing)
         {
-            base.OnKeyDown(e);
+            if (disposing) _deferTimer?.Dispose();
+            base.Dispose(disposing);
+        }
 
-            if (Items.Count == 0)
-                return;
+        public void RefreshLayout()
+        {
+            if (!Disposing && IsHandleCreated) UpdateScrollBarLayout();
+        }
 
-            if (e.KeyCode != Keys.Down && e.KeyCode != Keys.Up)
-                return;
+        public new void BeginUpdate() => _list.BeginUpdate();
+        public new void EndUpdate()
+        {
+            _list.EndUpdate();
+            ScheduleLayout();
+        }
 
-            if (MultiSelect && ModifierKeys == Keys.Shift)
+        private void ScheduleLayout()
+        {
+            if (_layoutPending || !IsHandleCreated) return;
+            _layoutPending = true;
+            BeginInvoke(() =>
             {
-                if (e.KeyCode == Keys.Up)
+                _layoutPending = false;
+                if (!Disposing && IsHandleCreated) UpdateScrollBarLayout();
+            });
+        }
+
+        private void UpdateScrollBarLayout()
+        {
+            if (_updateLayout || !IsHandleCreated || !_list.IsHandleCreated) return;
+            try
+            {
+                _updateLayout = true;
+
+                int cw = ClientSize.Width - B * 2;
+                int ch = ClientSize.Height - B * 2;
+                if (cw < 20 || ch < 20) return;
+
+                for (int pass = 0; pass < 2; pass++)
                 {
-                    if (_anchoredItemEnd - 1 >= 0)
+                    SCROLLINFO vsi = new SCROLLINFO { cbSize = Marshal.SizeOf<SCROLLINFO>(), fMask = SIF_ALL };
+                    GetScrollInfo(_list.Handle, SB_VERT, ref vsi);
+                    bool vVis = _list.Items.Count > vsi.nPage && vsi.nPage > 0;
+
+                    SCROLLINFO hsi = new SCROLLINFO { cbSize = Marshal.SizeOf<SCROLLINFO>(), fMask = SIF_ALL };
+                    GetScrollInfo(_list.Handle, SB_HORZ, ref hsi);
+                    bool hVis = hsi.nMax > hsi.nPage && hsi.nPage > 0;
+
+                    int vbw = vVis ? _scrollSize : 0;
+                    int hbh = hVis ? _scrollSize : 0;
+
+                    if (vVis)
                     {
-                        SelectAnchoredRange(_anchoredItemEnd - 1);
-                        EnsureVisible();
+                        _vScrollBar.ViewSize = vsi.nPage;
+                        _vScrollBar.Maximum = _list.Items.Count;
+                        if (_vScrollBar.Value != vsi.nPos) _vScrollBar.Value = vsi.nPos;
+                        _vScrollBar.Bounds = new Rectangle(B + cw - _scrollSize, B, _scrollSize, ch - hbh);
                     }
-                }
-                else if (e.KeyCode == Keys.Down)
-                {
-                    if (_anchoredItemEnd + 1 <= Items.Count - 1)
+                    _vScrollBar.Visible = vVis;
+
+                    if (hVis)
                     {
-                        SelectAnchoredRange(_anchoredItemEnd + 1);
+                        _hScrollBar.ViewSize = hsi.nPage;
+                        _hScrollBar.Maximum = hsi.nMax;
+                        if (_hScrollBar.Value != hsi.nPos) _hScrollBar.Value = hsi.nPos;
+                        _hScrollBar.Bounds = new Rectangle(B, B + ch - _scrollSize, cw - vbw, _scrollSize);
                     }
+                    _hScrollBar.Visible = hVis;
+
+                    _list.Bounds = new Rectangle(B, B, cw - vbw, ch - hbh);
                 }
-            }
-            else
-            {
-                if (e.KeyCode == Keys.Up)
+
+                _list.SendToBack();
+                _vScrollBar.BringToFront();
+                _hScrollBar.BringToFront();
+
+                if (_vScrollBar.Visible || _hScrollBar.Visible) _list.Invalidate();
+
+                if (_vScrollBar.Visible && _list.Items.Count > 0)
                 {
-                    if (_anchoredItemEnd - 1 >= 0)
-                        SelectItem(_anchoredItemEnd - 1);
+                    int idx = Math.Max(0, Math.Min(_list.Items.Count - 1, _vScrollBar.Value));
+                    if (_list.TopItem == null || _list.TopItem.Index != idx)
+                        _list.TopItem = _list.Items[idx];
                 }
-                else if (e.KeyCode == Keys.Down)
+                if (_hScrollBar.Visible)
                 {
-                    if (_anchoredItemEnd + 1 <= Items.Count - 1)
-                        SelectItem(_anchoredItemEnd + 1);
+                    SCROLLINFO curHsi = new SCROLLINFO { cbSize = Marshal.SizeOf<SCROLLINFO>(), fMask = SIF_ALL };
+                    GetScrollInfo(_list.Handle, SB_HORZ, ref curHsi);
+                    int delta = _hScrollBar.Value - curHsi.nPos;
+                    if (delta != 0)
+                        SendMessage(_list.Handle, LVM_SCROLL, (IntPtr)delta, IntPtr.Zero);
                 }
-            }
-
-            EnsureVisible();
-        }
-
-        #endregion
-
-        #region Method Region
-
-        public int GetItemIndex(DarkListItem item)
-        {
-            return Items.IndexOf(item);
-        }
-
-        public void SelectItem(int index)
-        {
-            if (index < 0 || index > Items.Count - 1)
-                throw new IndexOutOfRangeException($"Value '{index}' is outside of valid range.");
-
-            _selectedIndices.Clear();
-            _selectedIndices.Add(index);
-
-            SelectedIndicesChanged?.Invoke(this, null);
-
-            _anchoredItemStart = index;
-            _anchoredItemEnd = index;
-
-            Invalidate();
-        }
-
-        public void SelectItems(IEnumerable<int> indexes)
-        {
-            _selectedIndices.Clear();
-
-            var list = indexes.ToList();
-
-            foreach (var index in list)
-            {
-                if (index < 0 || index > Items.Count - 1)
-                    throw new IndexOutOfRangeException($"Value '{index}' is outside of valid range.");
-
-                _selectedIndices.Add(index);
-            }
-
-            SelectedIndicesChanged?.Invoke(this, null);
-
-            _anchoredItemStart = list[list.Count - 1];
-            _anchoredItemEnd = list[list.Count - 1];
-
-            Invalidate();
-        }
-
-        public void ToggleItem(int index)
-        {
-            if (_selectedIndices.Contains(index))
-            {
-                _selectedIndices.Remove(index);
-
-                // If we just removed both the anchor start AND end then reset them
-                if (_anchoredItemStart == index && _anchoredItemEnd == index)
+                else
                 {
-                    if (_selectedIndices.Count > 0)
-                    {
-                        _anchoredItemStart = _selectedIndices[0];
-                        _anchoredItemEnd = _selectedIndices[0];
-                    }
-                    else
-                    {
-                        _anchoredItemStart = -1;
-                        _anchoredItemEnd = -1;
-                    }
+                    SCROLLINFO curHsi = new SCROLLINFO { cbSize = Marshal.SizeOf<SCROLLINFO>(), fMask = SIF_ALL };
+                    GetScrollInfo(_list.Handle, SB_HORZ, ref curHsi);
+                    if (curHsi.nPos != 0)
+                        SendMessage(_list.Handle, LVM_SCROLL, (IntPtr)(-curHsi.nPos), IntPtr.Zero);
                 }
-
-                // If we just removed the anchor start then update it accordingly
-                if (_anchoredItemStart == index)
+                // Distribute columns evenly across available width
+                if (_list.Columns.Count > 0 && _list.ClientSize.Width > 40)
                 {
-                    if (_anchoredItemEnd < index)
-                        _anchoredItemStart = index - 1;
-                    else if (_anchoredItemEnd > index)
-                        _anchoredItemStart = index + 1;
-                    else
-                        _anchoredItemStart = _anchoredItemEnd;
-                }
-
-                // If we just removed the anchor end then update it accordingly
-                if (_anchoredItemEnd == index)
-                {
-                    if (_anchoredItemStart < index)
-                        _anchoredItemEnd = index - 1;
-                    else if (_anchoredItemStart > index)
-                        _anchoredItemEnd = index + 1;
-                    else
-                        _anchoredItemEnd = _anchoredItemStart;
+                    int each = _list.ClientSize.Width / _list.Columns.Count;
+                    for (int i = 0; i < _list.Columns.Count; i++)
+                        _list.Columns[i].Width = each;
                 }
             }
-            else
-            {
-                _selectedIndices.Add(index);
-                _anchoredItemStart = index;
-                _anchoredItemEnd = index;
-            }
-
-            SelectedIndicesChanged?.Invoke(this, null);
-
-            Invalidate();
+            finally { _updateLayout = false; }
         }
-
-        public void SelectItems(int startRange, int endRange)
-        {
-            _selectedIndices.Clear();
-
-            if (startRange == endRange)
-                _selectedIndices.Add(startRange);
-
-            if (startRange < endRange)
-            {
-                for (var i = startRange; i <= endRange; i++)
-                    _selectedIndices.Add(i);
-            }
-            else if (startRange > endRange)
-            {
-                for (var i = startRange; i >= endRange; i--)
-                    _selectedIndices.Add(i);
-            }
-
-            SelectedIndicesChanged?.Invoke(this, null);
-
-            Invalidate();
-        }
-
-        private void SelectAnchoredRange(int index)
-        {
-            _anchoredItemEnd = index;
-            SelectItems(_anchoredItemStart, index);
-        }
-
-        private void UpdateListBox()
-        {
-            using (var g = CreateGraphics())
-            {
-                for (var i = 0; i <= Items.Count - 1; i++)
-                {
-                    var item = Items[i];
-                    UpdateItemSize(item, g);
-                    UpdateItemPosition(item, i);
-                }
-            }
-
-            UpdateContentSize();
-        }
-
-        private void UpdateItemSize(DarkListItem item)
-        {
-            using (var g = CreateGraphics())
-            {
-                UpdateItemSize(item, g);
-            }
-        }
-
-        private void UpdateItemSize(DarkListItem item, Graphics g)
-        {
-            var size = g.MeasureString(item.Text, Font);
-            size.Width++;
-
-            if (ShowIcons)
-                size.Width += IconSize + 8;
-
-            item.Area = new Rectangle(item.Area.Left, item.Area.Top, (int)size.Width, item.Area.Height);
-        }
-
-        private void UpdateItemPosition(DarkListItem item, int index)
-        {
-            item.Area = new Rectangle(2, index * ItemHeight, item.Area.Width, ItemHeight);
-        }
-
-        private void UpdateContentSize()
-        {
-            var highestWidth = 0;
-
-            foreach (var item in Items)
-            {
-                if (item.Area.Right + 1 > highestWidth)
-                    highestWidth = item.Area.Right + 1;
-            }
-
-            var width = highestWidth;
-            var height = Items.Count * ItemHeight;
-
-            if (ContentSize.Width != width || ContentSize.Height != height)
-            {
-                ContentSize = new Size(width, height);
-                Invalidate();
-            }
-        }
-
-        private void UpdateContentSize(DarkListItem item)
-        {
-            var itemWidth = item.Area.Right + 1;
-
-            if (itemWidth == ContentSize.Width)
-            {
-                UpdateContentSize();
-                return;
-            }
-
-            if (itemWidth > ContentSize.Width)
-            {
-                ContentSize = new Size(itemWidth, ContentSize.Height);
-                Invalidate();
-            }
-        }
-
-        public void EnsureVisible()
-        {
-            if (SelectedIndices.Count == 0)
-                return;
-
-            int itemTop;
-            if (!MultiSelect)
-                itemTop = SelectedIndices[0] * ItemHeight;
-            else
-                itemTop = _anchoredItemEnd * ItemHeight;
-
-            var itemBottom = itemTop + ItemHeight;
-
-            if (itemTop < Viewport.Top)
-                VScrollTo(itemTop);
-
-            if (itemBottom > Viewport.Bottom)
-                VScrollTo(itemBottom - Viewport.Height);
-        }
-
-        private IEnumerable<int> ItemIndexesInView()
-        {
-            var top = Viewport.Top / ItemHeight - 1;
-
-            if (top < 0)
-                top = 0;
-
-            var bottom = (Viewport.Top + Viewport.Height) / ItemHeight + 1;
-
-            if (bottom > Items.Count)
-                bottom = Items.Count;
-
-            var result = Enumerable.Range(top, bottom - top);
-            return result;
-        }
-
-        #endregion
-
-        #region Paint Region
-
-        protected override void PaintContent(Graphics g)
-        {
-            var range = ItemIndexesInView().ToList();
-
-            if (range.Count != 0)
-            {
-                var top = range.Min();
-                var bottom = range.Max();
-
-                for (var i = top; i <= bottom; i++)
-                {
-                    var width = Math.Max(ContentSize.Width, Viewport.Width);
-                    var rect = new Rectangle(0, i * ItemHeight, width, ItemHeight);
-
-                    // Background
-                    var odd = i % 2 != 0;
-                    var bgColor = !odd ? Colors.HeaderBackground : Colors.GreyBackground;
-
-                    if (SelectedIndices.Count > 0 && SelectedIndices.Contains(i))
-                        bgColor = Focused ? Colors.BlueSelection : Colors.GreySelection;
-
-                    using (var b = new SolidBrush(bgColor))
-                    {
-                        g.FillRectangle(b, rect);
-                    }
-
-                    // Icon
-                    if (ShowIcons && Items[i].Icon != null)
-                    {
-                        g.DrawImage(Items[i].Icon, new Point(rect.Left + 5, rect.Top + rect.Height / 2 - IconSize / 2));
-                    }
-
-                    // Text
-                    using (var b = new SolidBrush(Items[i].TextColor))
-                    {
-                        var stringFormat = new StringFormat
-                        {
-                            Alignment = StringAlignment.Near,
-                            LineAlignment = StringAlignment.Center
-                        };
-
-                        var modFont = new Font(Font, Items[i].FontStyle);
-
-                        var modRect = new Rectangle(rect.Left + 2, rect.Top, rect.Width, rect.Height);
-
-                        if (ShowIcons)
-                            modRect.X += IconSize + 8;
-
-                        g.DrawString(Items[i].Text, modFont, b, modRect, stringFormat);
-                    }
-                }
-            }
-
-            // Border
-            using (var p = new Pen(Colors.LightBorder))
-            {
-                g.DrawRectangle(p, new Rectangle(new Point(), ClientSize - new Size(1, 1)));
-            }
-        }
-
-        #endregion
     }
 }

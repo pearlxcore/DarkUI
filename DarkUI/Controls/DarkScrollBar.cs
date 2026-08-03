@@ -123,6 +123,7 @@ namespace DarkUI.Controls
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public new bool Visible
         {
             get { return base.Visible; }

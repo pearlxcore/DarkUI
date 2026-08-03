@@ -36,6 +36,7 @@ namespace DarkUI.Docking
 
         public DarkDockContent VisibleContent { get; private set; }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int Order { get; set; }
 
         public int ContentCount { get { return _contents.Count; } }

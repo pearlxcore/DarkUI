@@ -113,15 +113,19 @@ namespace DarkUI.Forms
                 case DarkMessageBoxIcon.None:
                     picIcon.Visible = false;
                     lblText.Left = 10;
+                    btnCopy.Visible = false;
                     break;
                 case DarkMessageBoxIcon.Information:
                     picIcon.Image = MessageBoxIcons.info;
+                    btnCopy.Visible = false;
                     break;
                 case DarkMessageBoxIcon.Warning:
                     picIcon.Image = MessageBoxIcons.warning;
+                    btnCopy.Visible = true;
                     break;
                 case DarkMessageBoxIcon.Error:
                     picIcon.Image = MessageBoxIcons.error;
+                    btnCopy.Visible = true;
                     break;
             }
         }
@@ -138,7 +142,10 @@ namespace DarkUI.Forms
             lblText.Text = _message;
 
             // Set the minimum dialog size to whichever is bigger - the original size or the buttons.
-            var minWidth = Math.Max(width, TotalButtonSize + 15);
+            var footerWidth = TotalButtonSize + 15;
+            if (btnCopy.Visible)
+                footerWidth += btnCopy.Width + 15;
+            var minWidth = Math.Max(width, footerWidth);
 
             // Calculate the total size of the message
             var totalWidth = lblText.Right + 25;
@@ -180,6 +187,22 @@ namespace DarkUI.Forms
             base.OnLoad(e);
 
             CalculateSize();
+        }
+
+        private void btnCopy_Click(object sender, EventArgs e)
+        {
+            if (string.IsNullOrEmpty(_message))
+                return;
+
+            try
+            {
+                Clipboard.SetText(_message);
+                btnCopy.Text = "Copied";
+            }
+            catch (System.Runtime.InteropServices.ExternalException)
+            {
+                btnCopy.Text = "Failed";
+            }
         }
 
         #endregion

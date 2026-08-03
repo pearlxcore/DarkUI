@@ -26,6 +26,7 @@ namespace DarkUI.Controls
 
         #region Designer Property Region
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Visible)]
         public new string Text
         {
             get { return base.Text; }
@@ -36,6 +37,7 @@ namespace DarkUI.Controls
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public new bool Enabled
         {
             get { return base.Enabled; }

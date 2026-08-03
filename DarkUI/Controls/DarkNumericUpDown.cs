@@ -12,10 +12,12 @@ namespace DarkUI.Controls
     {
         [Category("Data")]
         [Description("Determines increment value used with shift modifier.")]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public decimal IncrementAlternate { get; set; } = 1.0M;
 
         [Category("Behavior")]
         [Description("Forces mousewheel to scroll by one increment.")]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool MousewheelSingleIncrement { get; set; } = true;
 
         private bool _mouseDown;

@@ -35,6 +35,7 @@ namespace DarkUI.Controls
 
         [Category("Appearance")]
         [Browsable(true)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public new Font Font { get { return base.Font; } set { base.Font = value; } }
 
         public DarkProgressBar()

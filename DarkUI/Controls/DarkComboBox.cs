@@ -94,6 +94,7 @@ namespace DarkUI.Controls
 
         [Category("Appearance")]
         [ReadOnly(true)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Color ButtonColor
         {
             get { return _buttonColor; }
@@ -106,6 +107,7 @@ namespace DarkUI.Controls
 
         [Category("Appearance")]
         [ReadOnly(true)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Bitmap ButtonIcon
         {
             get { return _buttonIcon; }
@@ -118,6 +120,7 @@ namespace DarkUI.Controls
 
         [Category("Appearance")]
         [ReadOnly(true)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Color BorderColor
         {
             get { return _borderColor; }
@@ -150,6 +153,7 @@ namespace DarkUI.Controls
 
         [Category("Appearance")]
         [ReadOnly(true)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Padding TextPadding
         {
             get { return _textPadding; }

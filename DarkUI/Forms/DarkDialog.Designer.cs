@@ -161,7 +161,7 @@ namespace DarkUI.Forms
 
         #endregion
 
-        private System.Windows.Forms.Panel pnlFooter;
+        protected System.Windows.Forms.Panel pnlFooter;
         private System.Windows.Forms.FlowLayoutPanel flowInner;
         protected DarkButton btnYes;
         protected DarkButton btnNo;

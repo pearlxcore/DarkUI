@@ -32,6 +32,7 @@ namespace DarkUI.Forms
         {
             this.picIcon = new System.Windows.Forms.PictureBox();
             this.lblText = new DarkLabel();
+            this.btnCopy = new DarkButton();
             ((System.ComponentModel.ISupportInitialize)(this.picIcon)).BeginInit();
             this.SuspendLayout();
             // 
@@ -52,6 +53,17 @@ namespace DarkUI.Forms
             this.lblText.TabIndex = 4;
             this.lblText.Text = "Something something something";
             // 
+            // btnCopy
+            // 
+            this.btnCopy.Location = new System.Drawing.Point(10, 10);
+            this.btnCopy.Name = "btnCopy";
+            this.btnCopy.Padding = new System.Windows.Forms.Padding(5);
+            this.btnCopy.Size = new System.Drawing.Size(75, 26);
+            this.btnCopy.TabIndex = 5;
+            this.btnCopy.Text = "Copy";
+            this.btnCopy.Visible = false;
+            this.btnCopy.Click += new System.EventHandler(this.btnCopy_Click);
+            // 
             // DarkMessageBox
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
@@ -59,6 +71,7 @@ namespace DarkUI.Forms
             this.ClientSize = new System.Drawing.Size(244, 86);
             this.Controls.Add(this.lblText);
             this.Controls.Add(this.picIcon);
+            this.pnlFooter.Controls.Add(this.btnCopy);
             this.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
@@ -79,5 +92,6 @@ namespace DarkUI.Forms
 
         private System.Windows.Forms.PictureBox picIcon;
         private DarkLabel lblText;
+        private DarkButton btnCopy;
     }
 }

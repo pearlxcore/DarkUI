@@ -1,5 +1,6 @@
 ﻿using DarkUI.Icons;
 using System;
+using System.ComponentModel;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -9,6 +10,7 @@ namespace DarkUI.Forms
     {
         private const int MaximumWidth = 700;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         internal string Message { get; set; }
 
         internal DarkDialogMessageBox()
@@ -23,6 +25,7 @@ namespace DarkUI.Forms
             CalculateSize();
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         internal new MessageBoxIcon Icon
         {
             set

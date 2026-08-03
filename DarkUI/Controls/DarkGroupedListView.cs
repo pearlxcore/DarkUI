@@ -18,6 +18,7 @@ namespace DarkUI.Controls
         private readonly List<int> _groupRows = new();
         private (string name, int width)[] _cachedColumns;
         private bool _updating;
+        private bool _suppressSync;
         private bool _updateLayout;
         private int _sortCol = -1;
         private bool _sortAsc = true;
@@ -30,6 +31,9 @@ namespace DarkUI.Controls
         public string SelectedFilePath { get; private set; }
 
         private ContextMenuStrip _contextMenu;
+        private ContextMenuStrip _hookedMenu;
+        private int _restoreRow = -1;   // pending restore: current cell to return to after menu closes
+        private int _restoreCol = -1;
 
         public DarkGroupedListView()
         {
@@ -186,9 +190,27 @@ namespace DarkUI.Controls
                     if (e.Button == MouseButtons.Left)
                     {
                         ToggleGroup(e.RowIndex);
+                        // Auto-select the group's top PKG so the highlight + app sync follow.
+                        // Only when expanded — selecting a hidden row would throw.
+                        if (!IsGroupCollapsed(e.RowIndex))
+                        {
+                            for (int r = e.RowIndex + 1; r < _base.Rows.Count && !_groupRows.Contains(r); r++)
+                            {
+                                if (_base.Rows[r].Tag != null)
+                                {
+                                    _base.CurrentCell = _base.Rows[r].Cells[0]; // fires sync (intended)
+                                    _base.Rows[r].Selected = true;
+                                    break;
+                                }
+                            }
+                        }
                     }
                     else if (e.Button == MouseButtons.Right)
                     {
+                        // The DGV already parked the current cell on this header row during
+                        // MouseDown — that drives the IsGroupActive highlight while the menu
+                        // is open. The cell/selection is restored when the menu closes
+                        // (see ContextMenu_Closed / MouseDown). No explicit selection here.
                         string raw = _base.Rows[e.RowIndex].Cells[0].Value?.ToString() ?? "";
                         string groupName = raw;
                         if (groupName.StartsWith("▼ ") || groupName.StartsWith("▶ "))
@@ -200,6 +222,23 @@ namespace DarkUI.Controls
                     return;
                 }
 
+                if (e.Button == MouseButtons.Right)
+                {
+                    // Target the menu at the CLICKED row so the label has a real target
+                    // (like the DGV), but WITHOUT raising SelectedItemChanged — no PKG
+                    // read, no sync. The current cell/selection is restored separately.
+                    var rtag = _base.Rows[e.RowIndex].Tag;
+                    if (rtag != null)
+                    {
+                        var t = rtag.GetType();
+                        var p = t.GetProperty("Path") ?? t.GetProperty("FilePath");
+                        SelectedFilePath = p?.GetValue(rtag)?.ToString() ?? rtag.ToString();
+                    }
+                    if (_contextMenu != null)
+                        _contextMenu.Show(Cursor.Position);
+                    return;
+                }
+
                 var tag = _base.Rows[e.RowIndex].Tag;
                 if (tag != null)
                 {
@@ -208,10 +247,120 @@ namespace DarkUI.Controls
                     SelectedFilePath = p?.GetValue(tag)?.ToString() ?? tag.ToString();
                 }
                 SelectedItemChanged?.Invoke(this, EventArgs.Empty);
+            };
 
-                // Show context menu on item right-click
-                if (e.Button == MouseButtons.Right && _contextMenu != null)
-                    _contextMenu.Show(Cursor.Position);
+            // WinForms DGV moves CurrentCell on ANY click (including right-click), which would
+            // fire CurrentCellChanged → group highlight + app sync (PKG re-read). Capture the
+            // pre-click cell here (the event fires before DGV's internal selection logic) and
+            // suppress the sync during the click's cell move.
+            //   • item right-click → restore immediately (view-only click)
+            //   • header right-click → keep the parked highlight for the menu's lifetime,
+            //     restore when the menu closes (ContextMenu_Closed)
+            _base.MouseDown += (s, e) =>
+            {
+                if (e.Button != MouseButtons.Right) return;
+                var hit = _base.HitTest(e.X, e.Y);
+                if (hit.Type != DataGridViewHitTestType.Cell || hit.RowIndex < 0) return;
+                bool onHeader = _groupRows.Contains(hit.RowIndex);
+
+                int keepRow = _base.CurrentCellAddress.Y;
+                int keepCol = _base.CurrentCellAddress.X;
+                _suppressSync = true;
+                _base.BeginInvoke((System.Windows.Forms.MethodInvoker)(() =>
+                {
+                    _suppressSync = false;
+                    if (keepRow < 0 || keepRow >= _base.Rows.Count || _base.Columns.Count == 0) return;
+                    int col = Math.Max(0, keepCol);
+                    if (onHeader)
+                    {
+                        _restoreRow = keepRow;   // release when the menu closes
+                        _restoreCol = col;
+                    }
+                    else
+                    {
+                        _suppressSync = true;
+                        _base.CurrentCell = _base.Rows[keepRow].Cells[col];
+                        _base.Rows[keepRow].Selected = true;
+                        _suppressSync = false;
+                    }
+                }));
+            };
+
+            // Keyboard navigation (arrow keys) changes the current row without a mouse click —
+            // sync SelectedFilePath and notify listeners so the main grid follows the highlight.
+            _base.CurrentCellChanged += (s, e) =>
+            {
+                if (_updating || _suppressSync) return;
+                _base.Invalidate(); // repaint group-header highlight for the new current row
+                var row = _base.CurrentRow;
+                if (row == null || row.Tag == null) return;
+                var tag = row.Tag;
+                var t = tag.GetType();
+                var p = t.GetProperty("Path") ?? t.GetProperty("FilePath");
+                string path = p?.GetValue(tag)?.ToString() ?? tag.ToString();
+                if (string.Equals(SelectedFilePath, path, StringComparison.OrdinalIgnoreCase)) return;
+                SelectedFilePath = path;
+                SelectedItemChanged?.Invoke(this, EventArgs.Empty);
+            };
+
+            // Keyboard navigation never lands on a group header row.
+            // Covers Up/Down/Home/End/PageUp/PageDown. The jump happens before
+            // CurrentCellChanged sync so the synced path is always an item row.
+            _base.KeyDown += (s, e) =>
+            {
+                if (_base.RowCount == 0 || _base.Columns.Count == 0) return;
+                int row = _base.CurrentRow?.Index ?? 0;
+                int col = Math.Max(0, Math.Min(_base.CurrentCell?.ColumnIndex ?? 0, _base.Columns.Count - 1));
+
+                int target = -1;
+                switch (e.KeyCode)
+                {
+                    case Keys.Down:
+                        target = NextVisibleRowExpanding(row, 1);
+                        break;
+                    case Keys.Up:
+                        target = NextVisibleRowExpanding(row, -1);
+                        break;
+                    case Keys.Home:
+                        target = NextNonGroupRow(-1, 1);
+                        break;
+                    case Keys.End:
+                        target = NextNonGroupRow(_base.RowCount, -1);
+                        break;
+                    case Keys.PageDown:
+                    {
+                        int page = Math.Max(1, _base.DisplayedRowCount(false) - 1);
+                        target = NextNonGroupRow(row, page);
+                        break;
+                    }
+                    case Keys.PageUp:
+                    {
+                        int page = Math.Max(1, _base.DisplayedRowCount(false) - 1);
+                        target = NextNonGroupRow(row, -page);
+                        break;
+                    }
+                }
+
+                if (target < 0) return;               // nothing found — let DGV behave
+                if (target == row) { e.Handled = true; return; }  // stay put, never land on a header
+                if (target < _base.Rows.Count && col < _base.Rows[target].Cells.Count)
+                {
+                    _base.CurrentCell = _base.Rows[target].Cells[col];
+                    _base.Rows[target].Selected = true;
+                    e.Handled = true;
+                }
+            };
+
+            // A group header renders highlighted while any of its items is the
+            // current row (or the header itself is current, e.g. after right-click).
+            _base.CellFormatting += (s, e) =>
+            {
+                if (e.RowIndex < 0 || !_groupRows.Contains(e.RowIndex)) return;
+                bool active = IsGroupActive(e.RowIndex);
+                e.CellStyle.BackColor = active ? Colors.GreySelection : Colors.MediumBackground;
+                e.CellStyle.SelectionBackColor = active ? Colors.GreySelection : Colors.MediumBackground;
+                e.CellStyle.ForeColor = Colors.LightText;
+                e.CellStyle.SelectionForeColor = Colors.LightText;
             };
 
             _base.MouseWheel += (s, e) =>
@@ -268,7 +417,33 @@ namespace DarkUI.Controls
         public ContextMenuStrip ContextMenuStrip
         {
             get => _contextMenu;
-            set { _contextMenu = value; /* do NOT set _base.ContextMenuStrip — it suppresses CellMouseClick */ }
+            set
+            {
+                _contextMenu = value; /* do NOT set _base.ContextMenuStrip — it suppresses CellMouseClick */
+                // Hook Closed so the group-header highlight can be released once the
+                // (shared) menu closes. The app shows this same menu for group headers.
+                if (value != null && !ReferenceEquals(value, _hookedMenu))
+                {
+                    if (_hookedMenu != null)
+                        _hookedMenu.Closed -= ContextMenu_Closed;
+                    value.Closed += ContextMenu_Closed;
+                    _hookedMenu = value;
+                }
+            }
+        }
+
+        private void ContextMenu_Closed(object sender, ToolStripDropDownClosedEventArgs e)
+        {
+            if (_restoreRow < 0) return;
+            int row = _restoreRow, col = _restoreCol;
+            _restoreRow = -1; _restoreCol = -1;
+            if (row >= 0 && row < _base.Rows.Count && _base.Columns.Count > 0)
+            {
+                _suppressSync = true;
+                _base.CurrentCell = _base.Rows[row].Cells[Math.Max(0, col)];
+                _base.Rows[row].Selected = true;
+                _suppressSync = false;
+            }
         }
 
         public bool MultiSelect
@@ -422,6 +597,53 @@ namespace DarkUI.Controls
             return paths;
         }
 
+        /// <summary>
+        /// Selects the item row whose tag path matches (DGV → GLV sync), expanding
+        /// the containing group first when it is collapsed. Returns true when a row
+        /// was selected; never raises SelectedItemChanged — the caller is already
+        /// the source of the selection, so this cannot loop back.
+        /// </summary>
+        public bool SelectFilePath(string filePath)
+        {
+            if (_updating || _suppressSync || string.IsNullOrEmpty(filePath)) return false;
+
+            for (int r = 0; r < _base.Rows.Count; r++)
+            {
+                var row = _base.Rows[r];
+                if (row.Tag == null) continue;
+
+                var t = row.Tag.GetType();
+                var p = t.GetProperty("Path") ?? t.GetProperty("FilePath");
+                string path = p?.GetValue(row.Tag)?.ToString() ?? row.Tag.ToString();
+                if (!string.Equals(path, filePath, StringComparison.OrdinalIgnoreCase)) continue;
+
+                // Expand a collapsed group so the target row becomes visible
+                if (!row.Visible)
+                {
+                    int hdr = FindGroupHeader(r);
+                    if (hdr >= 0 && IsGroupCollapsed(hdr))
+                        ExpandGroup(hdr);
+                    if (!row.Visible) return false; // still hidden — cannot select
+                }
+
+                if (_base.CurrentCellAddress.Y == r && row.Selected)
+                    return false; // already current — nothing to do
+
+                _suppressSync = true;
+                try
+                {
+                    _base.CurrentCell = row.Cells[0];
+                    row.Selected = true;
+                }
+                finally
+                {
+                    _suppressSync = false;
+                }
+                return true;
+            }
+            return false;
+        }
+
         // ── Layout ───────────────────────────────────────────────
 
         protected override void OnResize(EventArgs e)
@@ -530,6 +752,102 @@ namespace DarkUI.Controls
                 };
             }
             return Parse(a).CompareTo(Parse(b));
+        }
+
+        private int NextVisibleRowExpanding(int fromRow, int delta)
+        {
+            int dir = delta > 0 ? 1 : -1;
+            int r = fromRow + delta;
+            while (r >= 0 && r < _base.RowCount)
+            {
+                if (_groupRows.Contains(r))
+                {
+                    // A collapsed group directly ahead — expand it and enter its first item.
+                    if (dir > 0 && IsGroupCollapsed(r))
+                    {
+                        ExpandGroup(r);
+                        return r + 1;
+                    }
+                    r += dir; // header is never a landing spot
+                    continue;
+                }
+
+                if (_base.Rows[r].Visible)
+                    return r;
+
+                // Invisible item = inside a collapsed group above (Up key).
+                // Expand that group and land on its last item (nearest to current).
+                if (dir < 0)
+                {
+                    int hdr = FindGroupHeader(r);
+                    if (hdr >= 0)
+                    {
+                        ExpandGroup(hdr);
+                        return LastItemOfGroup(hdr);
+                    }
+                }
+                r += dir;
+            }
+            return fromRow;
+        }
+
+        private bool IsGroupCollapsed(int hdrRow)
+        {
+            string txt = _base.Rows[hdrRow].Cells[0].Value?.ToString() ?? "";
+            return txt.StartsWith("▶");
+        }
+
+        private void ExpandGroup(int hdrRow)
+        {
+            if (IsGroupCollapsed(hdrRow)) ToggleGroup(hdrRow);
+        }
+
+        private int FindGroupHeader(int itemRow)
+        {
+            int owner = -1;
+            foreach (int h in _groupRows)
+            {
+                if (h <= itemRow) owner = h;
+                else break;
+            }
+            return owner;
+        }
+
+        private int LastItemOfGroup(int hdrRow)
+        {
+            int next = -1;
+            foreach (int h in _groupRows)
+            {
+                if (h > hdrRow) { next = h; break; }
+            }
+            int last = next > 0 ? next - 1 : _base.RowCount - 1;
+            return Math.Max(last, hdrRow + 1);
+        }
+
+        private int NextNonGroupRow(int fromRow, int delta)
+        {
+            int dir = delta > 0 ? 1 : -1;
+            int r = fromRow + delta;
+            while (r >= 0 && r < _base.RowCount)
+            {
+                if (!_groupRows.Contains(r) && _base.Rows[r].Visible)
+                    return r;
+                r += dir;
+            }
+            return fromRow;
+        }
+
+        private bool IsGroupActive(int hdrRow)
+        {
+            int cur = _base.CurrentCell?.RowIndex ?? -1;
+            if (cur < 0) return false;
+            int owner = -1;
+            foreach (int h in _groupRows)
+            {
+                if (h <= cur) owner = h;
+                else break;
+            }
+            return owner == hdrRow;
         }
 
         // ── Collapse/expand ─────────────────────────────────────

@@ -36,13 +36,13 @@ namespace DarkUI.Controls
         {
             return new DataGridViewCellStyle
             {
-                // Darker colors:
-                // BackColor = isOdd ? Colors.MediumBackground : Colors.DarkBackground,
                 BackColor = isHeader ? Colors.DarkBackground :
                         (isOdd ? Colors.GreyBackground : Colors.HeaderBackground),
                 ForeColor = Colors.LightText,
                 SelectionBackColor = isFocused && isHeader? Colors.DarkBackground : Colors.BlueSelection,
                 SelectionForeColor = Colors.LightText,
+                Alignment = isHeader ? DataGridViewContentAlignment.MiddleCenter : DataGridViewContentAlignment.NotSet,
+                Padding = isHeader ? new Padding(0) : new Padding(),
             };
         }
 
@@ -533,6 +533,7 @@ namespace DarkUI.Controls
         }
 
         [ReadOnly(true)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Color OutlineColor
         {
             get { return base.BackColor; }
@@ -612,6 +613,7 @@ namespace DarkUI.Controls
         [DefaultValue(true)]
         [EditorBrowsable(EditorBrowsableState.Advanced)]
         public bool AutoGenerateColumns { get { return _base.AutoGenerateColumns; } set { _base.AutoGenerateColumns = value; } }
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public new bool AutoSize { get { return _base.AutoSize; } set { _base.AutoSize = value; } }
         [DefaultValue(DataGridViewAutoSizeColumnsMode.None)]
         public DataGridViewAutoSizeColumnsMode AutoSizeColumnsMode { get { return _base.AutoSizeColumnsMode; } set { _base.AutoSizeColumnsMode = value; } }
@@ -623,12 +625,15 @@ namespace DarkUI.Controls
         [ReadOnly(true)]
         public new Color BackColor { get { return _base.BackColor; } set { _base.BackColor = value; } }
         [ReadOnly(true)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Color BackgroundColor { get { return _base.BackgroundColor; } set { _base.BackgroundColor = value; } }
         [Browsable(false)]
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public new Image BackgroundImage { get { return _base.BackgroundImage; } set { _base.BackgroundImage = value; } }
         [Browsable(false)]
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public new ImageLayout BackgroundImageLayout { get { return _base.BackgroundImageLayout; } set { _base.BackgroundImageLayout = value; } }
         [DefaultValue(BorderStyle.None)]
         public new BorderStyle BorderStyle { get { return _base.BorderStyle; } set { _base.BorderStyle = value; } }
@@ -647,6 +652,7 @@ namespace DarkUI.Controls
         [DefaultValue(DataGridViewHeaderBorderStyle.Single)]
         public DataGridViewHeaderBorderStyle ColumnHeadersBorderStyle { get { return _base.ColumnHeadersBorderStyle; } set { _base.ColumnHeadersBorderStyle = value; } }
         [Localizable(true)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int ColumnHeadersHeight { get { return _base.ColumnHeadersHeight; } set { _base.ColumnHeadersHeight = value; } }
         [DefaultValue(DataGridViewColumnHeadersHeightSizeMode.AutoSize)]
         [RefreshProperties(RefreshProperties.All)]
@@ -697,12 +703,14 @@ namespace DarkUI.Controls
         public int FirstDisplayedScrollingRowIndex { get { return _base.FirstDisplayedScrollingRowIndex; } set { _base.FirstDisplayedScrollingRowIndex = value; } }
         [Browsable(false)]
         [EditorBrowsable(EditorBrowsableState.Advanced)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public new Font Font { get { return _base.Font; } set { _base.Font = value; } }
         [Browsable(false)]
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         [EditorBrowsable(EditorBrowsableState.Advanced)]
         public new Color ForeColor { get { return _base.ForeColor; } set { _base.ForeColor = value; } }
         [ReadOnly(true)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Color GridColor { get { return _base.GridColor; } set { _base.GridColor = value; } }
         [Browsable(false)]
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -736,6 +744,7 @@ namespace DarkUI.Controls
         [DefaultValue(false)]
         public bool RowHeadersVisible { get { return _base.RowHeadersVisible; } set { _base.RowHeadersVisible = value; } }
         [Localizable(true)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int RowHeadersWidth { get { return _base.RowHeadersWidth; } set { _base.RowHeadersWidth = value; } }
         [DefaultValue(DataGridViewRowHeadersWidthSizeMode.EnableResizing)]
         [RefreshProperties(RefreshProperties.All)]
@@ -772,6 +781,7 @@ namespace DarkUI.Controls
         [Bindable(false)]
         [Browsable(false)]
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public new string Text { get { return _base.Text; } set { _base.Text = value; } }
         [Browsable(false)]
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]

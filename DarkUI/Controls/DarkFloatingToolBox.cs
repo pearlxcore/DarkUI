@@ -22,6 +22,7 @@ namespace DarkUI.Controls
     {
         [Category("Layout")]
         [Description("Determines snapping distance to parent control")]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Size SnappingMargin
         {
             get { return _dragSnappingMargin; }
@@ -31,6 +32,7 @@ namespace DarkUI.Controls
 
         [Category("Layout")]
         [Description("Determines if control should anchor to nearest parent side")]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool AutoAnchor
         {
             get { return _autoAnchor; }
@@ -40,6 +42,7 @@ namespace DarkUI.Controls
 
         [Category("Layout")]
         [Description("Determines if resize grip is horizontal or vertical.")]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool VerticalGrip
         {
             get { return _verticalGrip; }
@@ -53,6 +56,7 @@ namespace DarkUI.Controls
 
         [Category("Layout")]
         [Description("Determines resize grip size.")]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int GripSize
         {
             get { return _gripSize; }
@@ -66,6 +70,7 @@ namespace DarkUI.Controls
 
         [Category("Layout")]
         [Description("Determines margin around grip.")]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int GripMargin
         {
             get { return _gripMargin; }

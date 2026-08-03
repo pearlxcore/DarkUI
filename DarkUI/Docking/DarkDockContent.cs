@@ -25,6 +25,7 @@ namespace DarkUI.Docking
 
         [Category("Appearance")]
         [Description("Determines the text that will appear in the content tabs and headers.")]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string DockText
         {
             get { return _dockText; }
@@ -42,6 +43,7 @@ namespace DarkUI.Docking
 
         [Category("Appearance")]
         [Description("Determines the icon that will appear in the content tabs and headers.")]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Image Icon
         {
             get { return _icon; }
@@ -59,6 +61,7 @@ namespace DarkUI.Docking
 
         [Category("Behavior")]
         [Description("Determines the key used by this content in the dock serialization.")]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string SerializationKey { get; set; }
 
         [Browsable(false)]
