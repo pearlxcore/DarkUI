@@ -249,6 +249,16 @@ namespace DarkUI.Controls
             _tree.HandleCreated += (s, ev) => BeginInvoke(UpdateScrollBarLayout);
         }
 
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            base.OnEnabledChanged(e);
+            // Re-assert dark colors when toggled (defensive — a disabled TreeView
+            // normally keeps its BackColor, but this guarantees it).
+            _tree.BackColor = Colors.GreyBackground;
+            _tree.ForeColor = Colors.LightText;
+            _tree.Invalidate();
+        }
+
         protected override void OnResize(EventArgs e)
         {
             base.OnResize(e);

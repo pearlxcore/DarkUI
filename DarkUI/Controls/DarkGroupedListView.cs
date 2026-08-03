@@ -355,7 +355,18 @@ namespace DarkUI.Controls
             // current row (or the header itself is current, e.g. after right-click).
             _base.CellFormatting += (s, e) =>
             {
-                if (e.RowIndex < 0 || !_groupRows.Contains(e.RowIndex)) return;
+                if (e.RowIndex < 0) return;
+                if (!Enabled)
+                {
+                    // Disabled: keep the dark body + dimmed text — the DGV would
+                    // otherwise repaint with system colors (white/gray wash).
+                    e.CellStyle.BackColor = Colors.GreyBackground;
+                    e.CellStyle.SelectionBackColor = Colors.GreyBackground;
+                    e.CellStyle.ForeColor = Colors.DisabledText;
+                    e.CellStyle.SelectionForeColor = Colors.DisabledText;
+                    return;
+                }
+                if (!_groupRows.Contains(e.RowIndex)) return;
                 bool active = IsGroupActive(e.RowIndex);
                 e.CellStyle.BackColor = active ? Colors.GreySelection : Colors.MediumBackground;
                 e.CellStyle.SelectionBackColor = active ? Colors.GreySelection : Colors.MediumBackground;
@@ -645,6 +656,18 @@ namespace DarkUI.Controls
         }
 
         // ── Layout ───────────────────────────────────────────────
+
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            base.OnEnabledChanged(e);
+            // Re-assert dark colors — a disabled DataGridView repaints with system colors.
+            _base.BackgroundColor = Colors.GreyBackground;
+            _base.DefaultCellStyle.BackColor = Colors.GreyBackground;
+            _base.DefaultCellStyle.ForeColor = Colors.LightText;
+            _base.AlternatingRowsDefaultCellStyle.BackColor = Colors.GreyBackground;
+            _base.AlternatingRowsDefaultCellStyle.ForeColor = Colors.LightText;
+            _base.Invalidate();
+        }
 
         protected override void OnResize(EventArgs e)
         {

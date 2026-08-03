@@ -81,6 +81,16 @@ namespace DarkUI.Controls
             _base.RowHeadersDefaultCellStyle = _cellStyleHeader;
 
             _base.CellFormatting += BaseCellFormatting;
+            // Runs after BaseCellFormatting so the disabled look wins — the DGV would
+            // otherwise repaint with system colors (white/gray wash) when disabled.
+            _base.CellFormatting += (s, e) =>
+            {
+                if (e.RowIndex < 0 || Enabled) return;
+                e.CellStyle.BackColor = Colors.GreyBackground;
+                e.CellStyle.SelectionBackColor = Colors.GreyBackground;
+                e.CellStyle.ForeColor = Colors.DisabledText;
+                e.CellStyle.SelectionForeColor = Colors.DisabledText;
+            };
             _base.CellValueChanged += BaseCellValueChanged;
             _base.MouseWheel += BaseMouseWheel;
             _base.KeyDown += BaseKeyDown;
@@ -344,6 +354,16 @@ namespace DarkUI.Controls
         {
             base.OnSizeChanged(e);
             UpdateScrollBarLayout();
+        }
+
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            base.OnEnabledChanged(e);
+            // Re-assert dark colors — a disabled DataGridView repaints with system colors.
+            _base.BackgroundColor = Colors.GreyBackground;
+            _base.DefaultCellStyle = _cellStyleUnfocusedEven;
+            _base.AlternatingRowsDefaultCellStyle = _cellStyleUnfocusedOdd;
+            _base.Invalidate();
         }
 
         private void BaseLostFocus(object sender, EventArgs e)

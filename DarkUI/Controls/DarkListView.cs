@@ -24,6 +24,7 @@ namespace DarkUI.Controls
             const int SB_BOTH = 3;
             const int WM_VSCROLL = 0x115;
             const int WM_HSCROLL = 0x114;
+            const int WM_ERASEBKGND = 0x0014;
             const int LVM_INSERTITEMW = 0x104D;
             const int LVM_DELETEITEM = 0x1008;
             const int LVM_DELETEALLITEMS = 0x1009;
@@ -33,6 +34,16 @@ namespace DarkUI.Controls
 
             protected override void WndProc(ref Message m)
             {
+                // The native ListView erases its background with system colors when
+                // disabled (white body). Force the dark BackColor on every erase.
+                if (m.Msg == WM_ERASEBKGND)
+                {
+                    using (var g = Graphics.FromHdc(m.WParam))
+                        g.Clear(BackColor);
+                    m.Result = (IntPtr)1;
+                    return;
+                }
+
                 base.WndProc(ref m);
                 if (!IsHandleCreated) return;
                 ShowScrollBar(Handle, SB_BOTH, false);

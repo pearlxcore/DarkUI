@@ -19,6 +19,7 @@ namespace TestApp
         private readonly DarkButton _btnExpandAll;
         private readonly DarkButton _btnCollapseAll;
         private readonly DarkButton _btnGroupedData;
+        private readonly DarkButton _btnToggleEnable;
 
         public TestForm()
         {
@@ -65,8 +66,8 @@ namespace TestApp
             };
             _grouped = new DarkGroupedListView
             {
-                Location = new Point(12, 348), Size = new Size(1160, 510),
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
+                Location = new Point(12, 348), Size = new Size(1160, 330),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
             _grouped.MultiSelect = true;
             _grouped.GroupHeaderClicked += (rowIdx, groupName, args) =>
@@ -79,6 +80,52 @@ namespace TestApp
                     DarkUI.Forms.DarkMessageBox.ShowInformation($"Extract {files.Count} files from '{groupName}'", "Extract All"));
                 cm.Show(Cursor.Position);
             };
+
+            // ── New controls demo row ────────────────────────
+            var newLabel = new DarkLabel
+            {
+                Text = "New controls:",
+                Location = new Point(12, 688), AutoSize = true
+            };
+
+            var toggle = new DarkToggleSwitch { Location = new Point(90, 684), Size = new Size(44, 22) };
+            var toggleLbl = new DarkLabel { Text = "Toggle", Location = new Point(140, 688), AutoSize = true };
+
+            var track = new DarkTrackBar { Location = new Point(200, 684), Size = new Size(140, 24), Maximum = 100, Value = 40 };
+            var trackLbl = new DarkLabel { Text = "Slider", Location = new Point(346, 688), AutoSize = true };
+            track.ValueChanged += (s, e) => trackLbl.Text = $"Slider: {track.Value}";
+
+            var search = new DarkSearchBox { Location = new Point(400, 684), Size = new Size(160, 26) };
+            var searchLbl = new DarkLabel { Text = "Search", Location = new Point(566, 688), AutoSize = true };
+
+            var badge = new DarkBadge { Location = new Point(620, 684), Text = "12 new" };
+
+            var colorBtn = new DarkColorButton { Location = new Point(700, 684), Size = new Size(90, 26) };
+
+            var toastBtn = new DarkButton { Text = "Toast", Location = new Point(800, 684), Size = new Size(60, 26) };
+            toastBtn.Click += (s, e) => DarkToast.Show("Operation completed successfully!", DarkToast.ToastIcon.Success, 4000, true);
+
+            var overlayBtn = new DarkButton { Text = "Overlay", Location = new Point(866, 684), Size = new Size(70, 26) };
+            var overlay = new DarkLoadingOverlay { Dock = DockStyle.Fill, Message = "Working…" };
+            overlayBtn.Click += (s, e) =>
+            {
+                if (overlay.Visible) overlay.Hide();
+                else overlay.Show();
+            };
+
+            var breadcrumb = new DarkBreadcrumbBar { Location = new Point(12, 716), Size = new Size(1160, 28), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            breadcrumb.SetItems(new[] { "C:", "Projects", "DarkUI", "Controls" });
+            breadcrumb.SegmentClicked += (s, idx) => DarkToast.Show($"Breadcrumb: {breadcrumb.Items[idx]}", DarkToast.ToastIcon.Info, 2000, false);
+
+            var calendar = new DarkCalendar { Location = new Point(12, 752), Size = new Size(230, 160), Visible = false };
+
+            var toolTip = new DarkToolTip();
+            toolTip.SetToolTip(toggle, "Dark toggle switch");
+            toolTip.SetToolTip(track, "Dark track bar");
+            toolTip.SetToolTip(search, "Dark search box");
+            toolTip.SetToolTip(badge, "Dark badge");
+            toolTip.SetToolTip(colorBtn, "Dark color button");
+            toolTip.SetToolTip(breadcrumb, "Dark breadcrumb bar");
 
             // ── Buttons ─────────────────────────────────────
             _btnAddNodes = new DarkButton
@@ -134,18 +181,48 @@ namespace TestApp
                 _grouped.Clear();
             };
 
+            _btnToggleEnable = new DarkButton
+            {
+                Text = "Disable All",
+                Location = new Point(788, 868), Size = new Size(100, 28),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left
+            };
+            _btnToggleEnable.Click += (s, e) =>
+            {
+                bool disable = _tree.Enabled; // currently enabled → disable all
+                _tree.Enabled = !disable;
+                _list.Enabled = !disable;
+                _grouped.Enabled = !disable;
+                _btnToggleEnable.Text = disable ? "Enable All" : "Disable All";
+            };
+
             Controls.Add(treeLabel);
             Controls.Add(_tree);
             Controls.Add(listLabel);
             Controls.Add(_list);
             Controls.Add(groupedLabel);
             Controls.Add(_grouped);
+            Controls.Add(newLabel);
+            Controls.Add(toggle);
+            Controls.Add(toggleLbl);
+            Controls.Add(track);
+            Controls.Add(trackLbl);
+            Controls.Add(search);
+            Controls.Add(searchLbl);
+            Controls.Add(badge);
+            Controls.Add(colorBtn);
+            Controls.Add(toastBtn);
+            Controls.Add(breadcrumb);
+            Controls.Add(calendar);
+            Controls.Add(overlayBtn);
+            Controls.Add(overlay);
             Controls.Add(_btnAddNodes);
             Controls.Add(_btnExpandAll);
             Controls.Add(_btnCollapseAll);
             Controls.Add(_btnAddItems);
             Controls.Add(_btnGroupedData);
             Controls.Add(_btnClear);
+            Controls.Add(_btnToggleEnable);
 
             Load += (s, e) =>
             {
