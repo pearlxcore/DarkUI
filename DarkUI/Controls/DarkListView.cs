@@ -103,8 +103,34 @@ namespace DarkUI.Controls
                 TextRenderer.DrawText(e.Graphics, e.Header.Text, Font, tr, Colors.LightText,
                     TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter | TextFormatFlags.EndEllipsis);
             };
-            _list.DrawItem += (s, e) => { e.DrawDefault = true; };
-            _list.DrawSubItem += (s, e) => { e.DrawDefault = true; };
+            _list.DrawItem += (s, e) =>
+            {
+                if (!Enabled)
+                {
+                    // Disabled: paint the dark body + dimmed text manually —
+                    // DrawDefault would fall back to system colors (white body).
+                    using var b = new SolidBrush(Colors.GreyBackground);
+                    e.Graphics.FillRectangle(b, e.Bounds);
+                    var tr = new Rectangle(e.Bounds.X + 4, e.Bounds.Y, e.Bounds.Width - 8, e.Bounds.Height);
+                    TextRenderer.DrawText(e.Graphics, e.Item.Text, Font, tr, Colors.DisabledText,
+                        TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                    return;
+                }
+                e.DrawDefault = true;
+            };
+            _list.DrawSubItem += (s, e) =>
+            {
+                if (!Enabled)
+                {
+                    using var b = new SolidBrush(Colors.GreyBackground);
+                    e.Graphics.FillRectangle(b, e.Bounds);
+                    var tr = new Rectangle(e.Bounds.X + 4, e.Bounds.Y, e.Bounds.Width - 8, e.Bounds.Height);
+                    TextRenderer.DrawText(e.Graphics, e.SubItem.Text, Font, tr, Colors.DisabledText,
+                        TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                    return;
+                }
+                e.DrawDefault = true;
+            };
 
             _list.ColumnWidthChanging += (s, e) => ColumnWidthChanging?.Invoke(this, e);
             _list.ColumnWidthChanged += (s, e) => UpdateScrollBarLayout();
@@ -197,6 +223,16 @@ namespace DarkUI.Controls
             EventHandler idle = null;
             idle = (s, e) => { Application.Idle -= idle; if (!Disposing && IsHandleCreated) UpdateScrollBarLayout(); };
             Application.Idle += idle;
+        }
+
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            base.OnEnabledChanged(e);
+            // Re-assert dark colors — a disabled ListView can repaint its body
+            // with system colors otherwise.
+            _list.BackColor = Colors.GreyBackground;
+            _list.ForeColor = Colors.LightText;
+            _list.Invalidate();
         }
 
         protected override void Dispose(bool disposing)
