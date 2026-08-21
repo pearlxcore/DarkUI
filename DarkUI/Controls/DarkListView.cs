@@ -17,6 +17,7 @@ namespace DarkUI.Controls
         private int _scrollSize => Consts.ScrollBarSize;
         private bool _updateLayout;
         private bool _layoutPending;
+        private bool _fittingColumns;
 
         private class InnerList : ListView
         {
@@ -347,15 +348,37 @@ namespace DarkUI.Controls
                     if (curHsi.nPos != 0)
                         SendMessage(_list.Handle, LVM_SCROLL, (IntPtr)(-curHsi.nPos), IntPtr.Zero);
                 }
-                // Distribute columns evenly across available width
-                if (_list.Columns.Count > 0 && _list.ClientSize.Width > 40)
-                {
-                    int each = _list.ClientSize.Width / _list.Columns.Count;
-                    for (int i = 0; i < _list.Columns.Count; i++)
-                        _list.Columns[i].Width = each;
-                }
+                FitLastColumnToAvailableWidth();
             }
             finally { _updateLayout = false; }
+        }
+
+        /// <summary>
+        /// Keeps the final Details column flush with the right edge. This is the
+        /// ListView equivalent of a DataGridView fill column: user-resized
+        /// columns retain their widths and the final column uses the remainder.
+        /// </summary>
+        private void FitLastColumnToAvailableWidth()
+        {
+            if (_list.Columns.Count == 0 || _list.ClientSize.Width <= 0)
+                return;
+
+            int availableWidth = _list.ClientSize.Width;
+            int assigned = 0;
+            for (int i = 0; i < _list.Columns.Count - 1; i++)
+                assigned += _list.Columns[i].Width;
+
+            int lastWidth = Math.Max(30, availableWidth - assigned);
+            ColumnHeader lastColumn = _list.Columns[_list.Columns.Count - 1];
+            if (lastColumn.Width == lastWidth)
+                return;
+
+            try
+            {
+                _fittingColumns = true;
+                lastColumn.Width = lastWidth;
+            }
+            finally { _fittingColumns = false; }
         }
     }
 }
