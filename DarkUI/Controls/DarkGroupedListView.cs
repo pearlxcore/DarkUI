@@ -469,16 +469,17 @@ namespace DarkUI.Controls
             _base.Columns.Clear();
             for (int i = 0; i < cols.Length; i++)
             {
-                bool fillMode = cols[i].width <= 0;
                 var col = new DataGridViewTextBoxColumn
                 {
                     Name = cols[i].name,
                     HeaderText = cols[i].name,
-                    Width = fillMode ? 100 : cols[i].width,
+                    // Match DarkDataGridView: columns fill the available width,
+                    // and resizing one column redistributes the remaining space.
+                    // FillWeight preserves the caller's intended initial proportions.
+                    MinimumWidth = 24,
+                    FillWeight = Math.Max(1, cols[i].width),
                     SortMode = DataGridViewColumnSortMode.Programmatic,
-                    AutoSizeMode = fillMode
-                        ? DataGridViewAutoSizeColumnMode.Fill
-                        : DataGridViewAutoSizeColumnMode.None
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
                 };
                 if (i > 0) col.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
                 _base.Columns.Add(col);
