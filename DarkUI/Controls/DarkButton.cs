@@ -171,7 +171,17 @@ namespace DarkUI.Controls
 
             SetButtonState(DarkControlState.Normal);
             Padding = new Padding(_padding);
+
+            ThemeManager.ThemeChanged += OnThemeChanged;
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ThemeManager.ThemeChanged -= OnThemeChanged;
+            base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e) => Invalidate();
 
         #endregion
 
@@ -338,6 +348,9 @@ namespace DarkUI.Controls
             var borderColor = Colors.GreySelection;
             var fillColor = _useGenericBackColor ? (_isDefault ? Colors.DarkBlueBackground : Colors.LightBackground) : BackColor;
             var hoverColor = _useGenericBackColor ? (_isDefault ? Colors.BlueBackground : Colors.LighterBackground) : ControlPaint.Light(BackColor);
+            bool aeroGlass = AeroGlassRenderer.IsActive;
+            bool xpLuna = WindowsXpLunaRenderer.IsActive;
+            bool windows98 = Windows98Renderer.IsActive;
 
             if (Enabled)
             {
@@ -379,12 +392,58 @@ namespace DarkUI.Controls
                 fillColor = Colors.DarkGreySelection;
             }
 
-            using (var b = new SolidBrush(fillColor))
+            if (aeroGlass)
             {
+                AeroGlassRenderer.DrawSurface(g, rect, fillColor, borderColor, 7,
+                    ButtonState == DarkControlState.Pressed,
+                    Focused || ButtonState == DarkControlState.Hover || _isDefault);
+            }
+            else if (xpLuna)
+            {
+                WindowsXpLunaRenderer.DrawSurface(g, rect, fillColor, borderColor,
+                    ButtonState == DarkControlState.Pressed,
+                    Focused || ButtonState == DarkControlState.Hover || _isDefault);
+            }
+            else if (windows98)
+            {
+                Windows98Renderer.DrawSurface(g, rect, fillColor, ButtonState == DarkControlState.Pressed,
+                    Focused || ButtonState == DarkControlState.Hover || _isDefault);
+            }
+            else
+            {
+                using var b = new SolidBrush(fillColor);
                 g.FillRectangle(b, rect);
             }
 
-            if (ButtonStyle == DarkButtonStyle.Normal)
+            if (!aeroGlass && !xpLuna && !windows98 && ThemeManager.Active.DepthStyle != ThemeDepthStyle.Flat && Enabled)
+            {
+                bool pressed = ButtonState == DarkControlState.Pressed;
+                int strength = ThemeManager.Active.DepthStyle switch
+                {
+                    ThemeDepthStyle.Soft3D or ThemeDepthStyle.Neumorphic3D or
+                    ThemeDepthStyle.Clay3D or ThemeDepthStyle.Paper3D => 16,
+                    ThemeDepthStyle.Glass3D => 26,
+                    ThemeDepthStyle.Industrial3D or ThemeDepthStyle.Terminal3D => 32,
+                    ThemeDepthStyle.RetroWindows3D or ThemeDepthStyle.Console3D or
+                    ThemeDepthStyle.Crystal3D or ThemeDepthStyle.SciFi3D => 50,
+                    _ => 42
+                };
+                Color Shift(Color color, int amount) => Color.FromArgb(
+                    Math.Clamp(color.R + amount, 0, 255), Math.Clamp(color.G + amount, 0, 255), Math.Clamp(color.B + amount, 0, 255));
+                Color topLeft = Shift(fillColor, pressed ? -strength : strength);
+                Color bottomRight = Shift(fillColor, pressed ? strength : -strength);
+
+                using (var topPen = new Pen(topLeft))
+                using (var bottomPen = new Pen(bottomRight))
+                {
+                    g.DrawLine(topPen, 1, 1, Math.Max(1, rect.Right - 2), 1);
+                    g.DrawLine(topPen, 1, 1, 1, Math.Max(1, rect.Bottom - 2));
+                    g.DrawLine(bottomPen, 1, Math.Max(1, rect.Bottom - 2), Math.Max(1, rect.Right - 2), Math.Max(1, rect.Bottom - 2));
+                    g.DrawLine(bottomPen, Math.Max(1, rect.Right - 2), 1, Math.Max(1, rect.Right - 2), Math.Max(1, rect.Bottom - 2));
+                }
+            }
+
+            if (!aeroGlass && !xpLuna && !windows98 && ButtonStyle == DarkButtonStyle.Normal)
             {
                 using (var p = new Pen(borderColor, 1))
                 {

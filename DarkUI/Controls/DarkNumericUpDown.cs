@@ -1,8 +1,10 @@
 ﻿using DarkUI.Config;
+using DarkUI.Win32;
 using System;
 using System.ComponentModel;
 using System.Drawing;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security;
 using System.Windows.Forms;
 
@@ -50,6 +52,111 @@ namespace DarkUI.Controls
             {
                 // Don't do anything, we are running in a trusted contex.
             }
+            ThemeManager.ThemeChanged += OnThemeChanged;
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            if (!DesignMode) ApplyThemeColors();
+            // The inner edit draws its own native border (blue when focused)
+            // — paint it with the theme border instead. Only when it has a
+            // native border at all (None means the parent draws it).
+            if (Controls.Count > 0 && Controls[0] is TextBox edit && edit.BorderStyle != BorderStyle.None)
+                NativeFocusBorder.Apply(edit.Handle);
+            ApplyEditSubclass();
+        }
+
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            base.OnEnabledChanged(e);
+            if (Controls.Count > 0) Controls[0].Invalidate();
+        }
+
+        // ── Disabled-state theming for the inner edit ───────────────────
+        // A disabled native EDIT paints its text with system gray. Subclass
+        // the edit and overlay its text with the theme's DisabledText after
+        // the native paint.
+
+        private delegate IntPtr EditSubclassProcDelegate(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam,
+            UIntPtr uIdSubclass, IntPtr dwRefData);
+
+        [DllImport("comctl32.dll", CharSet = CharSet.Unicode)]
+        private static extern bool SetWindowSubclass(IntPtr hWnd, EditSubclassProcDelegate pfnSubclass,
+            UIntPtr uIdSubclass, IntPtr dwRefData);
+
+        [DllImport("comctl32.dll")]
+        private static extern IntPtr DefSubclassProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam,
+            UIntPtr uIdSubclass, IntPtr dwRefData);
+
+        private const int WM_PAINT = 0x000F;
+
+        private readonly EditSubclassProcDelegate _editSubclassProc = EditSubclassProcImpl;
+        private IntPtr _subclassedEdit;
+
+        private void ApplyEditSubclass()
+        {
+            if (Controls.Count == 0 || !(Controls[0] is TextBox edit)) return;
+            if (edit.Handle == _subclassedEdit) return;
+            if (SetWindowSubclass(edit.Handle, _editSubclassProc, (UIntPtr)2, IntPtr.Zero))
+                _subclassedEdit = edit.Handle;
+        }
+
+        private static IntPtr EditSubclassProcImpl(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam,
+            UIntPtr uIdSubclass, IntPtr dwRefData)
+        {
+            IntPtr result = DefSubclassProc(hWnd, uMsg, wParam, lParam, uIdSubclass, dwRefData);
+
+            if (uMsg == WM_PAINT)
+            {
+                var edit = Control.FromHandle(hWnd) as TextBox;
+                var owner = edit?.Parent as DarkNumericUpDown;
+                if (edit != null && owner != null && !owner.Enabled && edit.Text.Length > 0)
+                {
+                    using (var g = Graphics.FromHwnd(edit.Handle))
+                    {
+                        var rect = new Rectangle(0, 0, edit.ClientSize.Width, edit.ClientSize.Height);
+                        TextRenderer.DrawText(g, edit.Text, edit.Font, rect, Colors.DisabledText,
+                            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+                    }
+                }
+            }
+            return result;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ThemeManager.ThemeChanged -= OnThemeChanged;
+            base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e) => ApplyThemeColors();
+
+        private void ApplyThemeColors()
+        {
+            BackColor = Colors.LightBackground;
+            ForeColor = Colors.LightText;
+            Invalidate(true);
+        }
+
+        // ── Designer freeze guard ─────────────────────────────────────
+        // Theme-owned colors must not be serialized by the designer — a
+        // frozen value in Designer.cs would stop the control from
+        // following ThemeManager.
+        [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public new Color BackColor
+        {
+            get => Colors.LightBackground;
+            set => base.BackColor = Colors.LightBackground;
+        }
+
+        [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public new Color ForeColor
+        {
+            get => Colors.LightText;
+            set => base.ForeColor = Colors.LightText;
         }
 
         protected override void OnMouseDown(MouseEventArgs mevent)
@@ -116,7 +223,7 @@ namespace DarkUI.Controls
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            ControlPaint.DrawBorder(e.Graphics, ClientRectangle, Color.FromArgb(100, 100, 100), ButtonBorderStyle.Solid);
+            ControlPaint.DrawBorder(e.Graphics, ClientRectangle, Colors.GreySelection, ButtonBorderStyle.Solid);
         }
 
         protected override void OnMouseWheel(MouseEventArgs e)

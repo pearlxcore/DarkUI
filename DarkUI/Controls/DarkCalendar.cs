@@ -49,18 +49,47 @@ namespace DarkUI.Controls
         public DarkCalendar()
         {
             BackColor = Colors.GreyBackground;
+            ApplyCalendarColors();
+            ThemeManager.ThemeChanged += OnThemeChanged;
 
+            _calendar.DateChanged += (s, e) => DateChanged?.Invoke(this, e);
+
+            Controls.Add(_calendar);
+            _calendar.Dock = DockStyle.Fill;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ThemeManager.ThemeChanged -= OnThemeChanged;
+            base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e)
+        {
+            ApplyCalendarColors();
+            Invalidate(true);
+        }
+
+        private void ApplyCalendarColors()
+        {
             // Dark theme colors (MonthCalendar exposes a subset of themed colors)
             _calendar.BackColor = Colors.GreyBackground;
             _calendar.ForeColor = Colors.LightText;
             _calendar.TitleBackColor = Colors.MediumBackground;
             _calendar.TitleForeColor = Colors.LightText;
             _calendar.TrailingForeColor = Colors.DisabledText;
+        }
 
-            _calendar.DateChanged += (s, e) => DateChanged?.Invoke(this, e);
-
-            Controls.Add(_calendar);
-            _calendar.Dock = DockStyle.Fill;
+        // ── Designer freeze guard ─────────────────────────────────────
+        // Theme-owned colors must not be serialized by the designer — a
+        // frozen value in Designer.cs would stop the control from
+        // following ThemeManager.
+        [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public new Color BackColor
+        {
+            get => Colors.GreyBackground;
+            set => base.BackColor = Colors.GreyBackground;
         }
     }
 }

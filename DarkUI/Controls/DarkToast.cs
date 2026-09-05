@@ -63,7 +63,11 @@ namespace DarkUI.Controls
 
             Click += (s, e) => Dismiss();
             MouseDown += (s, e) => Dismiss();
+
+            ThemeManager.ThemeChanged += OnThemeChanged;
         }
+
+        private void OnThemeChanged(object sender, EventArgs e) => Invalidate();
 
         private void SlideTick(object sender, EventArgs e)
         {
@@ -114,11 +118,11 @@ namespace DarkUI.Controls
             using (var pen = new Pen(Colors.LightBorder))
                 g.DrawPath(pen, path);
 
-            // Accent bar
+            // Accent bar — theme status accents (themes can override per-theme)
             Color accent = Colors.BlueHighlight;
-            if (_icon == ToastIcon.Success) accent = Color.FromArgb(120, 200, 90);
-            else if (_icon == ToastIcon.Warning) accent = Color.FromArgb(220, 180, 60);
-            else if (_icon == ToastIcon.Error) accent = Color.FromArgb(220, 80, 80);
+            if (_icon == ToastIcon.Success) accent = Colors.StatusSuccess;
+            else if (_icon == ToastIcon.Warning) accent = Colors.StatusWarning;
+            else if (_icon == ToastIcon.Error) accent = Colors.StatusError;
             using (var b = new SolidBrush(accent))
                 g.FillRectangle(b, 0, 0, 4, Height);
 
@@ -133,6 +137,7 @@ namespace DarkUI.Controls
             {
                 _lifeTimer?.Dispose();
                 _slideTimer?.Dispose();
+                ThemeManager.ThemeChanged -= OnThemeChanged;
             }
             base.Dispose(disposing);
         }

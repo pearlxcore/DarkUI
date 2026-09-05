@@ -37,7 +37,16 @@ namespace DarkUI.Controls
                      ControlStyles.ResizeRedraw | ControlStyles.AllPaintingInWmPaint, true);
             Size = new Size(44, 22);
             Cursor = Cursors.Hand;
+            ThemeManager.ThemeChanged += OnThemeChanged;
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ThemeManager.ThemeChanged -= OnThemeChanged;
+            base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e) => Invalidate();
 
         protected override void OnMouseClick(MouseEventArgs e)
         {

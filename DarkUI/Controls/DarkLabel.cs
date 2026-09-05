@@ -48,6 +48,18 @@ namespace DarkUI.Controls
             }
         }
 
+        // ── Designer freeze guard ─────────────────────────────────────
+        // Theme-owned colors must not be serialized by the designer — a
+        // frozen value in Designer.cs would stop the control from
+        // following ThemeManager.
+        [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public new Color ForeColor
+        {
+            get => Enabled ? Colors.LightText : Colors.DisabledText;
+            set => base.ForeColor = Enabled ? Colors.LightText : Colors.DisabledText;
+        }
+
         #endregion
 
         #region Constructor Region
@@ -55,6 +67,33 @@ namespace DarkUI.Controls
         public DarkLabel()
         {
             ForeColor = Colors.LightText;
+            ThemeManager.ThemeChanged += OnThemeChanged;
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            if (!DesignMode) ApplyThemeColors();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ThemeManager.ThemeChanged -= OnThemeChanged;
+            base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e) => ApplyThemeColors();
+
+        private void ApplyThemeColors()
+        {
+            ForeColor = Enabled ? Colors.LightText : Colors.DisabledText;
+            Invalidate(true);
+        }
+
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            base.OnEnabledChanged(e);
+            ApplyThemeColors();
         }
 
         #endregion

@@ -1,4 +1,5 @@
 ﻿using DarkUI.Config;
+using System;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -6,6 +7,19 @@ namespace DarkUI.Controls
 {
     public class DarkTitle : Label
     {
+        public DarkTitle()
+        {
+            ThemeManager.ThemeChanged += OnThemeChanged;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ThemeManager.ThemeChanged -= OnThemeChanged;
+            base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e) => Invalidate();
+
         #region Paint Region
 
         protected override void OnPaint(PaintEventArgs e)
@@ -15,7 +29,7 @@ namespace DarkUI.Controls
 
             var textSize = g.MeasureString(Text, Font);
 
-            using (var b = new SolidBrush(Colors.LightText))
+            using (var b = new SolidBrush(Enabled ? Colors.LightText : Colors.DisabledText))
             {
                 g.DrawString(Text, Font, b, new PointF(-2, 0));
             }

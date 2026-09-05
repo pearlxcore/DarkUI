@@ -798,7 +798,9 @@ namespace DarkUI.Docking
             };
 
             // Draw text
-            var textColor = isVisibleTab ? Colors.LightText : Colors.DisabledText;
+            var textColor = isVisibleTab
+                ? isActiveGroup ? Colors.SelectionText : Colors.LightText
+                : Colors.DisabledText;
             using (var b = new SolidBrush(textColor))
             {
                 var textRect = new Rectangle(tabRect.Left + 5 + xOffset, tabRect.Top, tabRect.Width - tab.CloseButtonRectangle.Width - 7 - 5 - xOffset, tabRect.Height);

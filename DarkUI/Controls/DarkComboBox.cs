@@ -1,4 +1,5 @@
 ﻿using DarkUI.Config;
+using DarkUI.Win32;
 using System;
 using System.ComponentModel;
 using System.Drawing;
@@ -14,7 +15,6 @@ namespace DarkUI.Controls
 
         #region Fields
         // Visual look
-        private static readonly Brush _focusBrush = new SolidBrush(SystemColors.Highlight);
         private Color _borderColor = Colors.GreySelection;
         private ButtonBorderStyle _borderStyle = ButtonBorderStyle.Solid;
         private Color _buttonColor = Colors.LightBackground;
@@ -40,7 +40,32 @@ namespace DarkUI.Controls
 
             BackColor = Colors.LightBackground;
             ForeColor = Colors.LightText;
+            ThemeManager.ThemeChanged += OnThemeChanged;
         }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            if (!DesignMode) ApplyThemeColors();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ThemeManager.ThemeChanged -= OnThemeChanged;
+            base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e) => ApplyThemeColors();
+
+        private void ApplyThemeColors()
+        {
+            BackColor = Colors.LightBackground;
+            ForeColor = Colors.LightText;
+            _borderColor = Colors.GreySelection;
+            _buttonColor = Colors.LightBackground;
+            Invalidate(true);
+        }
+
         #endregion Constructor
 
         #region Properties
@@ -66,28 +91,32 @@ namespace DarkUI.Controls
             set { base.DropDownStyle = value; }
         }
 
-        [Category("Appearance")]
+        // ── Designer freeze guard ─────────────────────────────────────
+        // Theme-owned colors must not be serialized by the designer — a
+        // frozen value in Designer.cs would stop the control from
+        // following ThemeManager.
+        [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
         [ReadOnly(true)]
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public sealed override Color ForeColor
         {
-            get { return base.ForeColor; }
+            get => Colors.LightText;
             set
             {
-                base.ForeColor = value;
+                base.ForeColor = Colors.LightText;
                 Invalidate();
             }
         }
 
-        [Category("Appearance")]
+        [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
         [ReadOnly(true)]
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public sealed override Color BackColor
         {
-            get { return base.BackColor; }
+            get => Colors.LightBackground;
             set
             {
-                base.BackColor = value;
+                base.BackColor = Colors.LightBackground;
                 Invalidate();
             }
         }
@@ -199,33 +228,32 @@ namespace DarkUI.Controls
         #endregion
 
         #region Drawing Events
+        protected override void OnDropDown(EventArgs e)
+        {
+            base.OnDropDown(e);
+            // The open dropdown list is a native popup that paints a
+            // system-blue focus border around itself — repaint it with the
+            // theme border. Re-applied per open (the list window is
+            // recreated for each dropdown session).
+            NativeFocusBorder.ApplyToComboList(Handle);
+        }
+
         protected override void OnDrawItem(DrawItemEventArgs e)
         {
-            if (!DroppedDown && !DrawDropdownHoverOutline)
-            {
-                using (var backBrush = new SolidBrush(BackColor))
-                    e.Graphics.FillRectangle(backBrush, e.Bounds);
-            }
-            else
-            {
-                e.DrawBackground();
-            }
+            if (Items.Count <= e.Index || e.Index <= -1) return;
 
-            if (Items.Count <= e.Index || e.Index <= -1)
-                return;
+            bool sel = (e.State & DrawItemState.Selected) != 0;
+            Color bg = sel ? Colors.BlueSelection : BackColor;
+            Color fg = !Enabled ? Colors.DisabledText : (sel ? Colors.SelectionText : ForeColor);
 
-            using (var foreBrush = new SolidBrush(ForeColor))
-            {
-                var formatE = new ListControlConvertEventArgs(null, typeof(string), Items[e.Index]);
-                OnFormat(formatE);
-                string text = formatE.Value?.ToString() ?? Items[e.Index].ToString();
-                e.Graphics.DrawString(text, e.Font, foreBrush, e.Bounds, StringFormat.GenericDefault);
-            }
+            using (var b = new SolidBrush(bg))
+                e.Graphics.FillRectangle(b, e.Bounds);
 
-            if (DrawDropdownHoverOutline)
-            {
-                e.DrawFocusRectangle();
-            }
+            var formatE = new ListControlConvertEventArgs(null, typeof(string), Items[e.Index]);
+            OnFormat(formatE);
+            string text = formatE.Value?.ToString() ?? Items[e.Index].ToString();
+            TextRenderer.DrawText(e.Graphics, text, Font, e.Bounds, fg,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -250,9 +278,15 @@ namespace DarkUI.Controls
                 text = formatE.Value?.ToString() ?? SelectedItem.ToString();
             }
             using (var backBrush = new SolidBrush(BackColor))
-                e.Graphics.FillRectangle(Focused && DrawFocusRectangle ? _focusBrush : backBrush, textRect);
-            using (var foreBrush = new SolidBrush(ForeColor))
+                e.Graphics.FillRectangle(backBrush, textRect);
+            using (var foreBrush = new SolidBrush(Enabled ? ForeColor : Colors.DisabledText))
                 e.Graphics.DrawString(text ?? Text, Font, foreBrush, textRect, StringFormat.GenericDefault);
+        }
+
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            base.OnEnabledChanged(e);
+            Invalidate();
         }
 
         protected override void OnPaintBackground(PaintEventArgs e)

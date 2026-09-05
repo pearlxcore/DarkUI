@@ -98,7 +98,16 @@ namespace DarkUI.Controls
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
             ClampDimensions();
+            ThemeManager.ThemeChanged += OnThemeChanged;
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ThemeManager.ThemeChanged -= OnThemeChanged;
+            base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e) => Invalidate();
 
         public void FixPosition()
         {

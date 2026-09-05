@@ -38,9 +38,16 @@ namespace DarkUI.Controls
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer |
                      ControlStyles.AllPaintingInWmPaint, true);
-            BackColor = Color.FromArgb(140, 30, 32, 34);
+            BackColor = Color.FromArgb(140, Colors.DarkBackground);
             Visible = false;
             _spinnerTimer.Tick += (s, e) => { _angle = (_angle + 6) % 360; Invalidate(); };
+            ThemeManager.ThemeChanged += OnThemeChanged;
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e)
+        {
+            BackColor = Color.FromArgb(140, Colors.DarkBackground);
+            Invalidate();
         }
 
         public new void Show()
@@ -64,7 +71,11 @@ namespace DarkUI.Controls
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _spinnerTimer?.Dispose();
+            if (disposing)
+            {
+                _spinnerTimer?.Dispose();
+                ThemeManager.ThemeChanged -= OnThemeChanged;
+            }
             base.Dispose(disposing);
         }
 

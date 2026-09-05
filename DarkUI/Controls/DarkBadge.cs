@@ -15,6 +15,10 @@ namespace DarkUI.Controls
         private string _text = "";
         private Color _badgeColor = Colors.BlueSelection;
         private Color _textColor = Colors.LightText;
+        // Theme defaults at the time the badge was constructed — a theme
+        // switch only refreshes colors the user hasn't customized.
+        private Color _themeDefaultBadge = Colors.BlueSelection;
+        private Color _themeDefaultText = Colors.LightText;
 
         [Category("Appearance")]
         [DefaultValue("")]
@@ -45,6 +49,23 @@ namespace DarkUI.Controls
             AutoSize = true;
             Height = 20;
             Font = new Font("Segoe UI", 9F);
+            ThemeManager.ThemeChanged += OnThemeChanged;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ThemeManager.ThemeChanged -= OnThemeChanged;
+            base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e)
+        {
+            // Refresh only the untouched defaults — custom colors are kept.
+            if (_badgeColor == _themeDefaultBadge) _badgeColor = Colors.BlueSelection;
+            if (_textColor == _themeDefaultText) _textColor = Colors.LightText;
+            _themeDefaultBadge = Colors.BlueSelection;
+            _themeDefaultText = Colors.LightText;
+            Invalidate();
         }
 
         protected override void OnPaint(PaintEventArgs e)

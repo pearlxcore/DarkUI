@@ -1,4 +1,5 @@
-﻿using System.Drawing;
+﻿using DarkUI.Config;
+using System.Drawing;
 using System.Windows.Forms;
 
 namespace DarkUI.Controls
@@ -12,6 +13,9 @@ namespace DarkUI.Controls
             SetStyle(ControlStyles.OptimizedDoubleBuffer |
                      ControlStyles.ResizeRedraw |
                      ControlStyles.UserPaint, true);
+            // OnPaint fills the viewport with BackColor — the default
+            // SystemColors.Control would paint a light band in dark UIs.
+            BackColor = Colors.GreyBackground;
         }
 
         #endregion

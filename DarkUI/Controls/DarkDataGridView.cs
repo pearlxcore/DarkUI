@@ -25,11 +25,11 @@ namespace DarkUI.Controls
         private ScrollBars _scrollBars = ScrollBars.Both;
         private int _dragPosition = -1;
 
-        private static readonly DataGridViewCellStyle _cellStyleUnfocusedEven = GetCellStyle(false, false, false);
-        private static readonly DataGridViewCellStyle _cellStyleUnfocusedOdd = GetCellStyle(false, true, false);
-        private static readonly DataGridViewCellStyle _cellStyleFocusedEven = GetCellStyle(true, false, false);
-        private static readonly DataGridViewCellStyle _cellStyleFocusedOdd = GetCellStyle(true, true, false);
-        private static readonly DataGridViewCellStyle _cellStyleHeader = GetCellStyle(true, true, true);
+        private DataGridViewCellStyle _cellStyleUnfocusedEven = GetCellStyle(false, false, false);
+        private DataGridViewCellStyle _cellStyleUnfocusedOdd = GetCellStyle(false, true, false);
+        private DataGridViewCellStyle _cellStyleFocusedEven = GetCellStyle(true, false, false);
+        private DataGridViewCellStyle _cellStyleFocusedOdd = GetCellStyle(true, true, false);
+        private DataGridViewCellStyle _cellStyleHeader = GetCellStyle(true, true, true);
         private static readonly PropertyInfo _dataGridViewDoubleBuffered = typeof(DataGridView).GetProperty("DoubleBuffered", BindingFlags.NonPublic | BindingFlags.Instance);
 
         private static DataGridViewCellStyle GetCellStyle(bool isFocused, bool isOdd, bool isHeader)
@@ -40,7 +40,7 @@ namespace DarkUI.Controls
                         (isOdd ? Colors.GreyBackground : Colors.HeaderBackground),
                 ForeColor = Colors.LightText,
                 SelectionBackColor = isFocused && isHeader? Colors.DarkBackground : Colors.BlueSelection,
-                SelectionForeColor = Colors.LightText,
+                SelectionForeColor = isFocused && isHeader ? Colors.LightText : Colors.SelectionText,
                 Alignment = isHeader ? DataGridViewContentAlignment.MiddleCenter : DataGridViewContentAlignment.NotSet,
                 Padding = isHeader ? new Padding(0) : new Padding(),
             };
@@ -49,7 +49,7 @@ namespace DarkUI.Controls
         private const int DragDrawSideMargin = 3;
         private const int DragDrawHeight = 2;
 
-        private static readonly Brush _dragDrawBrush = new HatchBrush(HatchStyle.Percent50, Color.Transparent, Color.LightGray);
+        private static Brush _dragDrawBrush = new HatchBrush(HatchStyle.Percent50, Color.Transparent, Colors.LightText);
 
         private int _scrollSize => Consts.ScrollBarSize;
 
@@ -137,17 +137,51 @@ namespace DarkUI.Controls
             Controls.Add(_base);
             Controls.Add(_vScrollBar);
             Controls.Add(_hScrollBar);
+            ThemeManager.ThemeChanged += OnThemeChanged;
         }
 
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
+                ThemeManager.ThemeChanged -= OnThemeChanged;
                 _base?.Dispose();
                 _hScrollBar?.Dispose();
                 _vScrollBar?.Dispose();
             }
             base.Dispose(disposing);
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            if (!DesignMode) ApplyThemeColors();
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e) => ApplyThemeColors();
+
+        private void ApplyThemeColors()
+        {
+            // Rebuild cached cell styles with new theme colors
+            _cellStyleUnfocusedEven = GetCellStyle(false, false, false);
+            _cellStyleUnfocusedOdd = GetCellStyle(false, true, false);
+            _cellStyleFocusedEven = GetCellStyle(true, false, false);
+            _cellStyleFocusedOdd = GetCellStyle(true, true, false);
+            _cellStyleHeader = GetCellStyle(true, true, true);
+            _base.BackgroundColor = Colors.GreyBackground;
+            _base.GridColor = Colors.DarkBorder;
+            _base.DefaultCellStyle = _cellStyleUnfocusedEven;
+            _base.AlternatingRowsDefaultCellStyle = _cellStyleUnfocusedOdd;
+            _base.ColumnHeadersDefaultCellStyle = _cellStyleHeader;
+            OutlineColor = Colors.LightBorder;
+            _vScrollBar.BackColor = Colors.MediumBackground;
+            _hScrollBar.BackColor = Colors.MediumBackground;
+
+            // Drag indicator brush follows the theme (was hardcoded once at type load)
+            _dragDrawBrush.Dispose();
+            _dragDrawBrush = new HatchBrush(HatchStyle.Percent50, Color.Transparent, Colors.LightText);
+
+            Invalidate(true);
         }
 
         private void BaseCellValueChanged(object sender, DataGridViewCellEventArgs e)
@@ -552,12 +586,17 @@ namespace DarkUI.Controls
             }
         }
 
+        // ── Designer freeze guard ─────────────────────────────────────
+        // OutlineColor IS base.BackColor (the themed border) — clamp it so
+        // a serialized value in Designer.cs can never pin the outline to a
+        // stale color or stop it following ThemeManager.
+        [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
         [ReadOnly(true)]
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Color OutlineColor
         {
-            get { return base.BackColor; }
-            set { base.BackColor = value; }
+            get => Colors.LightBorder;
+            set => base.BackColor = Colors.LightBorder;
         }
 
         [DefaultValue(ScrollBars.Both)]

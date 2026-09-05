@@ -108,6 +108,15 @@ namespace DarkUI.Forms
 
         private void SetIcon(DarkMessageBoxIcon icon)
         {
+            // Plays the matching sound when the dialog opens (DarkForm.OnLoad).
+            NotificationIcon = icon switch
+            {
+                DarkMessageBoxIcon.Information => MessageBoxIcon.Information,
+                DarkMessageBoxIcon.Warning => MessageBoxIcon.Warning,
+                DarkMessageBoxIcon.Error => MessageBoxIcon.Error,
+                _ => MessageBoxIcon.None
+            };
+
             switch (icon)
             {
                 case DarkMessageBoxIcon.None:

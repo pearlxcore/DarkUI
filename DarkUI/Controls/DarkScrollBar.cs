@@ -151,7 +151,17 @@ namespace DarkUI.Controls
             _scrollTimer = new Timer();
             _scrollTimer.Interval = 1;
             _scrollTimer.Tick += ScrollTimerTick;
+
+            ThemeManager.ThemeChanged += OnThemeChanged;
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ThemeManager.ThemeChanged -= OnThemeChanged;
+            base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e) => Invalidate();
 
         #endregion
 

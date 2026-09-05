@@ -1,10 +1,12 @@
 ﻿using DarkUI.Config;
+using System;
 using System.ComponentModel;
 using System.Drawing;
 using System.Windows.Forms;
 
 namespace DarkUI.Controls
 {
+    [Designer(typeof(DarkGroupBoxDesigner))]
     public class DarkGroupBox : GroupBox
     {
         private Color _borderColor = Colors.LightBorder;
@@ -17,8 +19,32 @@ namespace DarkUI.Controls
             Paint += DarkGroupBox_Paint;
             ForeColor = Colors.LightText;
             BackColor = Colors.GreyBackground;
+            Padding = Padding.Empty;
             ResizeRedraw = true;
             DoubleBuffered = true;
+            ThemeManager.ThemeChanged += OnThemeChanged;
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            if (!DesignMode) ApplyThemeColors();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ThemeManager.ThemeChanged -= OnThemeChanged;
+            base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e) => ApplyThemeColors();
+
+        private void ApplyThemeColors()
+        {
+            _borderColor = Colors.LightBorder;
+            BackColor = Colors.GreyBackground;
+            ForeColor = Colors.LightText;
+            Invalidate();
         }
 
         private void DarkGroupBox_Paint(object sender, PaintEventArgs e)
@@ -41,7 +67,7 @@ namespace DarkUI.Controls
             textRect.X = textRect.X + 8;
             textRect.Width = tSize.Width + 6;
             textRect.Height = tSize.Height + 1;
-            e.Graphics.DrawString(Text, Font, new SolidBrush(ForeColor), textRect);
+            e.Graphics.DrawString(Text, Font, new SolidBrush(Enabled ? ForeColor : Colors.DisabledText), textRect);
 
         }
 
@@ -58,20 +84,26 @@ namespace DarkUI.Controls
             }
         }
 
+        // ── Designer freeze guard ─────────────────────────────────────
+        // Theme-owned colors must not be serialized by the designer — a
+        // frozen value in Designer.cs would stop the control from
+        // following ThemeManager.
+        [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
         [ReadOnly(true)]
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public new Color BackColor
         {
-            get { return base.BackColor; }
-            set { base.BackColor = value; }
+            get => Colors.GreyBackground;
+            set => base.BackColor = Colors.GreyBackground;
         }
 
+        [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
         [ReadOnly(true)]
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public new Color ForeColor
         {
-            get { return base.ForeColor; }
-            set { base.ForeColor = value; }
+            get => Colors.LightText;
+            set => base.ForeColor = Colors.LightText;
         }
     }
 }

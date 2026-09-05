@@ -129,6 +129,22 @@ namespace DarkUI.Controls
             SelectedItemChanged += DarkDropdownList_SelectedItemChanged;
 
             SetControlState(DarkControlState.Normal);
+
+            ThemeManager.ThemeChanged += OnThemeChanged;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ThemeManager.ThemeChanged -= OnThemeChanged;
+            base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e)
+        {
+            // Re-apply the selected/unselected menu item fills — they are set
+            // once per selection, not per paint.
+            DarkDropdownList_SelectedItemChanged(this, EventArgs.Empty);
+            Invalidate();
         }
 
         #endregion
@@ -461,7 +477,7 @@ namespace DarkUI.Controls
             }
 
             // Draw Text
-            using (var b = new SolidBrush(Colors.LightText))
+            using (var b = new SolidBrush(Enabled ? Colors.LightText : Colors.DisabledText))
             {
                 var stringFormat = new StringFormat
                 {

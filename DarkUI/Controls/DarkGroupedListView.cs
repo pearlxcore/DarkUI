@@ -9,6 +9,22 @@ using System.Windows.Forms;
 
 namespace DarkUI.Controls
 {
+    /// <summary>
+    /// Optional presentation overrides for an item cell in <see cref="DarkGroupedListView"/>.
+    /// This lets consumers add domain-specific status colors or images without
+    /// coupling the reusable control to their data model.
+    /// </summary>
+    public sealed class DarkGroupedListViewCellPresentation
+    {
+        public string Text { get; init; }
+        public Image Image { get; init; }
+        public Color? ForeColor { get; init; }
+        public Color? BackColor { get; init; }
+        public Color? SelectionForeColor { get; init; }
+        public Color? SelectionBackColor { get; init; }
+        public DataGridViewImageCellLayout ImageLayout { get; init; } = DataGridViewImageCellLayout.Zoom;
+    }
+
     public class DarkGroupedListView : UserControl
     {
         private readonly DataGridView _base = new DataGridView();
@@ -38,6 +54,7 @@ namespace DarkUI.Controls
         public DarkGroupedListView()
         {
             BackColor = Colors.LightBorder;
+            ThemeManager.ThemeChanged += OnThemeChanged;
 
             _base.Name = "baseView";
             _base.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
@@ -62,12 +79,12 @@ namespace DarkUI.Controls
             _base.DefaultCellStyle = new DataGridViewCellStyle
             {
                 BackColor = Colors.GreyBackground, ForeColor = Colors.LightText,
-                SelectionBackColor = Colors.BlueSelection, SelectionForeColor = Colors.LightText
+                SelectionBackColor = Colors.BlueSelection, SelectionForeColor = Colors.SelectionText
             };
             _base.AlternatingRowsDefaultCellStyle = new DataGridViewCellStyle
             {
                 BackColor = Colors.GreyBackground, ForeColor = Colors.LightText,
-                SelectionBackColor = Colors.BlueSelection, SelectionForeColor = Colors.LightText
+                SelectionBackColor = Colors.BlueSelection, SelectionForeColor = Colors.SelectionText
             };
             _base.ReadOnly = true;
             _base.AllowUserToAddRows = false;
@@ -80,7 +97,7 @@ namespace DarkUI.Controls
                 if (e.RowIndex >= 0 && _groupRows.Contains(e.RowIndex))
                 {
                     var r = _base.GetRowDisplayRectangle(e.RowIndex, false);
-                    using var hiPen = new Pen(Color.FromArgb(80, 85, 90));
+                    using var hiPen = new Pen(Colors.LightBorder); // theme-relative top line
                     e.Graphics.DrawLine(hiPen, r.Left, r.Top, r.Right - 1, r.Top);
                     using var shPen = new Pen(Colors.DarkBorder);
                     e.Graphics.DrawLine(shPen, r.Left, r.Bottom - 1, r.Right - 1, r.Bottom - 1);
@@ -170,10 +187,24 @@ namespace DarkUI.Controls
                         int r = _base.Rows.Add();
                         _base.Rows[r].Tag = item.Tag;
                         for (int c = 0; c < _base.Columns.Count && c < item.Cells.Count; c++)
-                            _base.Rows[r].Cells[c].Value = item.Cells[c].Value;
-                        if (item.Cells[3] is DataGridViewImageCell img)
-                            _base.Rows[r].Cells[3] = new DataGridViewImageCell
-                            { Value = img.Value, ImageLayout = DataGridViewImageCellLayout.Normal };
+                        {
+                            var source = item.Cells[c];
+                            if (source is DataGridViewImageCell imageCell)
+                            {
+                                _base.Rows[r].Cells[c] = new DataGridViewImageCell
+                                {
+                                    Value = imageCell.Value,
+                                    ImageLayout = imageCell.ImageLayout
+                                };
+                            }
+                            else
+                            {
+                                _base.Rows[r].Cells[c].Value = source.Value;
+                            }
+
+                            if (source.HasStyle)
+                                _base.Rows[r].Cells[c].Style = new DataGridViewCellStyle(source.Style);
+                        }
                         _base.Rows[r].Visible = !collapsed;
                     }
                 }
@@ -416,11 +447,84 @@ namespace DarkUI.Controls
         {
             if (disposing)
             {
+                ThemeManager.ThemeChanged -= OnThemeChanged;
                 _base?.Dispose();
                 _hScrollBar?.Dispose();
                 _vScrollBar?.Dispose();
             }
             base.Dispose(disposing);
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            if (!DesignMode) ApplyThemeColors();
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e) => ApplyThemeColors();
+
+        private void ApplyThemeColors()
+        {
+            BackColor = Colors.LightBorder;
+            _base.BackgroundColor = Colors.GreyBackground;
+            _base.GridColor = Colors.GreyBackground;
+            // Assign FRESH style objects rather than mutating — DataGridView's
+            // DefaultCellStyle property mutation was observed to not stick
+            // (the style kept the initial theme's colors after a theme change).
+            // The setter path notifies the grid and invalidates reliably.
+            _base.DefaultCellStyle = new DataGridViewCellStyle
+            {
+                BackColor = Colors.GreyBackground,
+                ForeColor = Colors.LightText,
+                SelectionBackColor = Colors.BlueSelection,
+                SelectionForeColor = Colors.SelectionText,
+            };
+            _base.AlternatingRowsDefaultCellStyle = new DataGridViewCellStyle
+            {
+                BackColor = Colors.GreyBackground,
+                ForeColor = Colors.LightText,
+                SelectionBackColor = Colors.BlueSelection,
+                SelectionForeColor = Colors.SelectionText,
+            };
+            // Column headers: same approach — fresh object with selection colors
+            // (they were frozen to the initial theme's charcoal before).
+            _base.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
+            {
+                BackColor = Colors.DarkBackground,
+                ForeColor = Colors.LightText,
+                SelectionBackColor = Colors.DarkBackground,
+                SelectionForeColor = Colors.LightText,
+                Alignment = DataGridViewContentAlignment.MiddleCenter,
+            };
+            _vScrollBar.BackColor = Colors.MediumBackground;
+            _hScrollBar.BackColor = Colors.MediumBackground;
+
+            // Group header rows carry their own DefaultCellStyle set at row-creation
+            // time (SetGroups / sort rebuild). Refresh them so they never hold stale
+            // theme colors. Font (Bold) is theme-independent — leave it.
+            foreach (int hdrIdx in _groupRows)
+            {
+                if (hdrIdx < 0 || hdrIdx >= _base.Rows.Count) continue;
+                var hdr = _base.Rows[hdrIdx];
+                hdr.DefaultCellStyle.BackColor = Colors.MediumBackground;
+                hdr.DefaultCellStyle.ForeColor = Colors.LightText;
+                hdr.DefaultCellStyle.SelectionBackColor = Colors.MediumBackground;
+                hdr.DefaultCellStyle.SelectionForeColor = Colors.LightText;
+            }
+
+            Invalidate(true);
+        }
+
+        // ── Designer freeze guard ─────────────────────────────────────
+        // The wrapper's BackColor is the themed BORDER — clamp it so a
+        // serialized value in Designer.cs can never pin it to a stale
+        // color or stop it following ThemeManager.
+        [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public new Color BackColor
+        {
+            get => Colors.LightBorder;
+            set => base.BackColor = Colors.LightBorder;
         }
 
         // ── Public API ──────────────────────────────────────────
@@ -487,7 +591,8 @@ namespace DarkUI.Controls
         }
 
         public void SetGroups<T>(IEnumerable<T> items, Func<T, string> groupBy,
-            Func<T, string[]> columnsFunc, Func<T, Image[]> imagesFunc = null)
+            Func<T, string[]> columnsFunc, Func<T, Image[]> imagesFunc = null,
+            Func<T, string, DarkGroupedListViewCellPresentation> presentationFunc = null)
         {
             _updating = true;
             _base.Rows.Clear();
@@ -531,17 +636,37 @@ namespace DarkUI.Controls
                     int r = _base.Rows.Add();
                     _base.Rows[r].Tag = item;
                     for (int c = 0; c < cols.Length && c < _base.Columns.Count; c++)
-                        _base.Rows[r].Cells[c].Value = cols[c];
-                    if (imgs != null && 3 < imgs.Length && imgs[3] != null && 3 < _base.Columns.Count)
-                        _base.Rows[r].Cells[3] = new DataGridViewImageCell
+                    {
+                        var presentation = presentationFunc?.Invoke(item, _base.Columns[c].Name);
+                        Image image = presentation?.Image ?? (imgs != null && c < imgs.Length ? imgs[c] : null);
+                        if (image != null)
                         {
-                            Value = imgs[3],
-                            ImageLayout = DataGridViewImageCellLayout.Normal
-                        };
+                            _base.Rows[r].Cells[c] = new DataGridViewImageCell
+                            {
+                                Value = image,
+                                ImageLayout = presentation?.ImageLayout ?? DataGridViewImageCellLayout.Normal
+                            };
+                        }
+                        else
+                        {
+                            _base.Rows[r].Cells[c].Value = presentation?.Text ?? cols[c];
+                        }
+
+                        ApplyCellPresentation(_base.Rows[r].Cells[c], presentation);
+                    }
                 }
             }
             _updating = false;
             UpdateScrollBarLayout();
+        }
+
+        private static void ApplyCellPresentation(DataGridViewCell cell, DarkGroupedListViewCellPresentation presentation)
+        {
+            if (presentation == null) return;
+            if (presentation.ForeColor.HasValue) cell.Style.ForeColor = presentation.ForeColor.Value;
+            if (presentation.BackColor.HasValue) cell.Style.BackColor = presentation.BackColor.Value;
+            if (presentation.SelectionForeColor.HasValue) cell.Style.SelectionForeColor = presentation.SelectionForeColor.Value;
+            if (presentation.SelectionBackColor.HasValue) cell.Style.SelectionBackColor = presentation.SelectionBackColor.Value;
         }
 
         public void Clear() { _base.Rows.Clear(); _groupRows.Clear(); UpdateScrollBarLayout(); }
@@ -707,12 +832,7 @@ namespace DarkUI.Controls
         {
             base.OnEnabledChanged(e);
             // Re-assert dark colors — a disabled DataGridView repaints with system colors.
-            _base.BackgroundColor = Colors.GreyBackground;
-            _base.DefaultCellStyle.BackColor = Colors.GreyBackground;
-            _base.DefaultCellStyle.ForeColor = Colors.LightText;
-            _base.AlternatingRowsDefaultCellStyle.BackColor = Colors.GreyBackground;
-            _base.AlternatingRowsDefaultCellStyle.ForeColor = Colors.LightText;
-            _base.Invalidate();
+            ApplyThemeColors();
         }
 
         protected override void OnResize(EventArgs e)

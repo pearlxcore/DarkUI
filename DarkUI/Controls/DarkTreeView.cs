@@ -1,4 +1,5 @@
 using DarkUI.Config;
+using DarkUI.Win32;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -105,11 +106,16 @@ namespace DarkUI.Controls
         public DarkTreeView()
         {
             base.BackColor = Colors.LightBorder;
+            ThemeManager.ThemeChanged += OnThemeChanged;
             _tree.BorderStyle = BorderStyle.None;
             _tree.BackColor = Colors.GreyBackground;
             _tree.ForeColor = Colors.LightText;
-            _tree.LineColor = Color.FromArgb(90, 95, 100);
+            _tree.LineColor = Colors.GreySelection;
             _tree.HideSelection = false;
+            // Native drawing (DrawMode.Normal) — OwnerDrawText proved unreliable:
+            // the native TreeView's text rendering can't be cleanly suppressed,
+            // producing doubled text and offset highlights. The native control draws
+            // text + selection correctly; BackColor/ForeColor follow the theme.
             _tree.DrawMode = TreeViewDrawMode.Normal;
             _tree.Font = new Font("Segoe UI", 10F);
             _tree.ItemHeight = 24;
@@ -196,8 +202,37 @@ namespace DarkUI.Controls
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _deferTimer?.Dispose();
+            if (disposing)
+            {
+                ThemeManager.ThemeChanged -= OnThemeChanged;
+                _deferTimer?.Dispose();
+            }
             base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e) => ApplyThemeColors();
+
+        private void ApplyThemeColors()
+        {
+            base.BackColor = Colors.LightBorder;
+            _tree.BackColor = Colors.GreyBackground;
+            _tree.ForeColor = Colors.LightText;
+            _tree.LineColor = Colors.GreySelection;
+            _vScrollBar.BackColor = Colors.MediumBackground;
+            _hScrollBar.BackColor = Colors.MediumBackground;
+            Invalidate(true);
+        }
+
+        // ── Designer freeze guard ─────────────────────────────────────
+        // The wrapper's BackColor is the themed BORDER — clamp it so a
+        // serialized value in Designer.cs can never pin it to a stale
+        // color or stop it following ThemeManager.
+        [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public new Color BackColor
+        {
+            get => Colors.LightBorder;
+            set => base.BackColor = Colors.LightBorder;
         }
 
         public void ExpandAll()
@@ -243,9 +278,65 @@ namespace DarkUI.Controls
             });
         }
 
+        // ── NM_CUSTOMDRAW: theme the native selection via colors only ──
+        // DrawMode stays Normal — the native TreeView draws text, images, glyphs,
+        // indent, geometry. We only supply clrText/clrTextBk per node so selection
+        // follows Colors.BlueSelection. No DrawNode, no manual drawing.
+        //
+        // PROTOTYPE SWITCH — PART 5 of the design doc:
+        //   true  = locally mask CDIS_SELECTED during the draw notification
+        //           (needed if visual styles override clrTextBk for selected nodes)
+        //   false = keep CDIS_SELECTED, rely on clrTextBk being honored.
+        // Flip after visual testing; do not ship unverified.
+        private const bool MaskSelectedStateForDraw = true;
+
+        protected override void WndProc(ref Message m)
+        {
+            // WM_NOTIFY from the inner native TreeView reaches this wrapper (its parent).
+            // Custom-draw runs even when disabled so the disabled tree keeps
+            // the themed palette (native disabled painting is system gray).
+            if (m.Msg == NativeCustomDraw.WM_NOTIFY && IsHandleCreated
+                && NativeCustomDraw.IsCustomDraw(m.LParam, _tree.Handle))
+            {
+                if (HandleTreeCustomDraw(ref m))
+                    return; // m.Result set — do not pass to base
+            }
+            base.WndProc(ref m);
+        }
+
+        private bool HandleTreeCustomDraw(ref Message m)
+        {
+            var tvcd = Marshal.PtrToStructure<NMTVCUSTOMDRAW>(m.LParam);
+
+            switch (tvcd.nmcd.dwDrawStage)
+            {
+                case NativeCustomDraw.CDDS_PREPAINT:
+                    m.Result = (IntPtr)NativeCustomDraw.CDRF_NOTIFYITEMDRAW;
+                    return true;
+
+                case NativeCustomDraw.CDDS_ITEMPREPAINT:
+                {
+                    bool sel = (tvcd.nmcd.uItemState & NativeCustomDraw.CDIS_SELECTED) != 0;
+
+                    tvcd.clrTextBk = NativeCustomDraw.ToColorRef(sel ? Colors.BlueSelection : _tree.BackColor);
+                    tvcd.clrText = NativeCustomDraw.ToColorRef(sel ? Colors.SelectionText
+                        : Enabled ? _tree.ForeColor : Colors.DisabledText);
+
+                    if (sel && MaskSelectedStateForDraw)
+                        tvcd.nmcd.uItemState &= ~NativeCustomDraw.CDIS_SELECTED;
+
+                    Marshal.StructureToPtr(tvcd, m.LParam, false);
+                    m.Result = (IntPtr)NativeCustomDraw.CDRF_DODEFAULT;
+                    return true;
+                }
+            }
+            return false;
+        }
+
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
+            if (!DesignMode) ApplyThemeColors();
             _tree.HandleCreated += (s, ev) => BeginInvoke(UpdateScrollBarLayout);
         }
 

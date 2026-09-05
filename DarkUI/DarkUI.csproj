@@ -14,7 +14,26 @@
     <Copyright>Copyright © Robin Perris</Copyright>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
+    <!--
+      .NET 10 uses Visual Studio's out-of-process WinForms designer. Its
+      designer API assembly must match the installed VS host. Developers can
+      override this directory for another VS 18 edition/install location.
+    -->
+    <WinFormsDesignerServerDir Condition="'$(WinFormsDesignerServerDir)' == ''">$(ProgramFiles)\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\Windows.Forms\DesignToolsServer\Common</WinFormsDesignerServerDir>
   </PropertyGroup>
+  <ItemGroup Condition="Exists('$(WinFormsDesignerServerDir)\Microsoft.DotNet.DesignTools.Server.dll')">
+    <Reference Include="Microsoft.DotNet.DesignTools.Server">
+      <HintPath>$(WinFormsDesignerServerDir)\Microsoft.DotNet.DesignTools.Server.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Microsoft.WinForms.Utilities.Shared">
+      <HintPath>$(WinFormsDesignerServerDir)\Microsoft.WinForms.Utilities.Shared.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup Condition="!Exists('$(WinFormsDesignerServerDir)\Microsoft.DotNet.DesignTools.Server.dll')">
+    <PackageReference Include="Microsoft.WinForms.Designer.SDK" Version="1.13.0-preview.2.24575.3" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Update="Controls\DarkCheckBox.cs">
       <SubType>Component</SubType>
@@ -25,13 +44,31 @@
     <Compile Update="Controls\DarkGroupBox.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Update="Controls\DarkGroupBoxDesigner.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="Controls\DarkHeaderBar.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="Controls\DarkFooterBar.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Update="Controls\DarkDropdownList.cs">
       <SubType>Component</SubType>
     </Compile>
     <Compile Update="Controls\DarkCheckedListBox.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Update="Controls\DarkChip.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="Controls\DarkChipsPanel.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Update="Controls\DarkListBox.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="Controls\DarkCheckedComboBox.cs">
       <SubType>Component</SubType>
     </Compile>
     <Compile Update="Controls\DarkNumericUpDown.cs">
@@ -50,6 +87,12 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Update="Controls\DarkListView.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="Controls\DarkSidebarTabControl.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="Controls\DarkSidebarTabControlDesigner.cs">
       <SubType>Component</SubType>
     </Compile>
     <Compile Update="Controls\DarkScrollBase.cs">
@@ -76,6 +119,18 @@
     <Compile Update="Controls\DarkSectionPanel.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Update="Controls\DarkSectionPanelDesigner.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="Controls\DarkTabPageDesigner.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="Controls\FitToContentsDesignerHelper.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="Controls\SectionPanelArrangementDesignerHelper.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Update="Controls\DarkSeparator.cs">
       <SubType>Component</SubType>
     </Compile>
@@ -86,6 +141,18 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Update="Controls\DarkToolStrip.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="Controls\DarkToolStripComboBox.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="Controls\DarkToolStripDropDownButton.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="Controls\DarkToolStripLabel.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Update="Controls\DarkToolStripSeparator.cs">
       <SubType>Component</SubType>
     </Compile>
     <Compile Update="Docking\DarkDockContent.cs">

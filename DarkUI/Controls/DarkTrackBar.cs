@@ -75,7 +75,16 @@ namespace DarkUI.Controls
                      ControlStyles.ResizeRedraw | ControlStyles.AllPaintingInWmPaint |
                      ControlStyles.Selectable | ControlStyles.UserMouse, true);
             Height = 24;
+            ThemeManager.ThemeChanged += OnThemeChanged;
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ThemeManager.ThemeChanged -= OnThemeChanged;
+            base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e) => Invalidate();
 
         private float PositionToValue(int x)
         {

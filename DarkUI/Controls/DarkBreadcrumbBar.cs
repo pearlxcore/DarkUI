@@ -31,6 +31,27 @@ namespace DarkUI.Controls
                      ControlStyles.ResizeRedraw | ControlStyles.AllPaintingInWmPaint, true);
             Height = 28;
             BackColor = Colors.GreyBackground;
+            ThemeManager.ThemeChanged += OnThemeChanged;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ThemeManager.ThemeChanged -= OnThemeChanged;
+            base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e) => Invalidate();
+
+        // ── Designer freeze guard ─────────────────────────────────────
+        // Theme-owned colors must not be serialized by the designer — a
+        // frozen value in Designer.cs would stop the control from
+        // following ThemeManager.
+        [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public new Color BackColor
+        {
+            get => Colors.GreyBackground;
+            set => base.BackColor = Colors.GreyBackground;
         }
 
         public void SetItems(IEnumerable<string> items)
@@ -120,7 +141,7 @@ namespace DarkUI.Controls
                     using (var b = new SolidBrush(Colors.GreySelection))
                         g.FillRectangle(b, r);
                 }
-                TextRenderer.DrawText(g, _items[i], Font, r, Colors.LightText,
+                TextRenderer.DrawText(g, _items[i], Font, r, Enabled ? Colors.LightText : Colors.DisabledText,
                     TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
 
                 // Chevron separator

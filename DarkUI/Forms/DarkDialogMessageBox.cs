@@ -30,6 +30,8 @@ namespace DarkUI.Forms
         {
             set
             {
+                // Plays the matching sound when the dialog opens (DarkForm.OnLoad).
+                NotificationIcon = value;
                 switch (value)
                 {
                     case MessageBoxIcon.None:

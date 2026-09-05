@@ -1,4 +1,5 @@
 using DarkUI.Config;
+using DarkUI.Win32;
 using System;
 using System.ComponentModel;
 using System.Drawing;
@@ -72,10 +73,18 @@ namespace DarkUI.Controls
         public bool AllowDrop { get => _list.AllowDrop; set => _list.AllowDrop = value; }
         public bool FullRowSelect { get => _list.FullRowSelect; set => _list.FullRowSelect = value; }
         public bool MultiSelect { get => _list.MultiSelect; set => _list.MultiSelect = value; }
+        public ColumnHeaderStyle HeaderStyle { get => _list.HeaderStyle; set => _list.HeaderStyle = value; }
         public new ContextMenuStrip ContextMenuStrip { get => _list.ContextMenuStrip; set => _list.ContextMenuStrip = value; }
         public System.Collections.IComparer ListViewItemSorter { get => _list.ListViewItemSorter; set => _list.ListViewItemSorter = value; }
+        public void Sort() => _list.Sort();
         public bool UseCompatibleStateImageBehavior { get; set; }
         public ListViewItem GetItemAt(int x, int y) => _list.GetItemAt(x, y);
+
+        // Hit test from a screen point — the inner ListView is offset inside
+        // this control (1px margin + scrollbar area), so translating through
+        // the inner control's client coords keeps the test exact.
+        public ListViewItem GetItemAtScreen(Point screenPoint)
+            => _list.GetItemAt(_list.PointToClient(screenPoint).X, _list.PointToClient(screenPoint).Y);
 
         public event ColumnWidthChangingEventHandler ColumnWidthChanging;
         public event EventHandler ItemActivate;
@@ -89,6 +98,7 @@ namespace DarkUI.Controls
         public DarkListView()
         {
             base.BackColor = Colors.LightBorder;
+            ThemeManager.ThemeChanged += OnThemeChanged;
             _list.BorderStyle = BorderStyle.None;
             _list.BackColor = Colors.GreyBackground;
             _list.ForeColor = Colors.LightText;
@@ -105,7 +115,7 @@ namespace DarkUI.Controls
                 var fillBounds = new Rectangle(e.Bounds.X, e.Bounds.Y, fillRight - e.Bounds.X, e.Bounds.Height);
                 using var bg = new SolidBrush(Colors.DarkBackground);
                 e.Graphics.FillRectangle(bg, fillBounds);
-                using var hi = new Pen(Color.FromArgb(90, 95, 100));
+                using var hi = new Pen(Colors.LightBorder);
                 e.Graphics.DrawLine(hi, e.Bounds.Left, e.Bounds.Top, e.Bounds.Right - 1, e.Bounds.Top);
                 e.Graphics.DrawLine(hi, e.Bounds.Left, e.Bounds.Top, e.Bounds.Left, e.Bounds.Bottom - 1);
                 using var sh = new Pen(Colors.DarkBorder);
@@ -115,37 +125,47 @@ namespace DarkUI.Controls
                 TextRenderer.DrawText(e.Graphics, e.Header.Text, Font, tr, Colors.LightText,
                     TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter | TextFormatFlags.EndEllipsis);
             };
+            // Enabled: let the native ListView draw items (icons, text, selection,
+            // hover) via DrawDefault. OwnerDraw item rendering proved unreliable in
+            // Details view (skipped cells on partial repaints, shifted positions).
+            // Only the disabled state is painted manually to keep the dark body.
             _list.DrawItem += (s, e) =>
             {
-                if (!Enabled)
+                if (Enabled)
                 {
-                    // Disabled: paint the dark body + dimmed text manually —
-                    // DrawDefault would fall back to system colors (white body).
-                    using var b = new SolidBrush(Colors.GreyBackground);
-                    e.Graphics.FillRectangle(b, e.Bounds);
-                    var tr = new Rectangle(e.Bounds.X + 4, e.Bounds.Y, e.Bounds.Width - 8, e.Bounds.Height);
-                    TextRenderer.DrawText(e.Graphics, e.Item.Text, Font, tr, Colors.DisabledText,
-                        TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                    e.DrawDefault = true;
                     return;
                 }
-                e.DrawDefault = true;
+                using var b = new SolidBrush(Colors.GreyBackground);
+                e.Graphics.FillRectangle(b, e.Bounds);
+                var tr = new Rectangle(e.Bounds.X + 4, e.Bounds.Y, e.Bounds.Width - 8, e.Bounds.Height);
+                TextRenderer.DrawText(e.Graphics, e.Item.Text, Font, tr, Colors.DisabledText,
+                    TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             };
             _list.DrawSubItem += (s, e) =>
             {
-                if (!Enabled)
+                if (Enabled)
                 {
-                    using var b = new SolidBrush(Colors.GreyBackground);
-                    e.Graphics.FillRectangle(b, e.Bounds);
-                    var tr = new Rectangle(e.Bounds.X + 4, e.Bounds.Y, e.Bounds.Width - 8, e.Bounds.Height);
-                    TextRenderer.DrawText(e.Graphics, e.SubItem.Text, Font, tr, Colors.DisabledText,
-                        TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                    e.DrawDefault = true;
                     return;
                 }
-                e.DrawDefault = true;
+                using var b = new SolidBrush(Colors.GreyBackground);
+                e.Graphics.FillRectangle(b, e.Bounds);
+                var tr = new Rectangle(e.Bounds.X + 4, e.Bounds.Y, e.Bounds.Width - 8, e.Bounds.Height);
+                TextRenderer.DrawText(e.Graphics, e.SubItem.Text, Font, tr, Colors.DisabledText,
+                    TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             };
 
             _list.ColumnWidthChanging += (s, e) => ColumnWidthChanging?.Invoke(this, e);
-            _list.ColumnWidthChanged += (s, e) => UpdateScrollBarLayout();
+            _list.ColumnWidthChanged += (s, e) =>
+            {
+                // Match a filled DataGridView: retain the width the user set,
+                // then use the final column to consume any spare header area.
+                // Defer so the native ListView applies the dragged width first.
+                if (!_fittingColumns && e.ColumnIndex < _list.Columns.Count - 1)
+                    BeginInvoke((Action)(() => FitLastColumnToAvailableWidth()));
+                UpdateScrollBarLayout();
+            };
             _list.ItemActivate += (s, e) => ItemActivate?.Invoke(this, e);
             _list.MouseClick += (s, e) => MouseClick?.Invoke(this, e);
             _list.MouseDoubleClick += (s, e) => MouseDoubleClick?.Invoke(this, e);
@@ -237,6 +257,107 @@ namespace DarkUI.Controls
             Application.Idle += idle;
         }
 
+        // ── NM_CUSTOMDRAW: theme the native selection via colors only ──
+        // The native ListView draws all content (text, icons, subitems, ellipsis);
+        // we only supply per-cell clrText/clrTextBk so the selection highlight
+        // follows Colors.BlueSelection. No manual row painting.
+        //
+        // PROTOTYPE SWITCH — PART 3 of the design doc:
+        //   true  = locally mask CDIS_SELECTED during the draw notification
+        //           (needed if Windows visual styles override clrTextBk for
+        //           selected items; the actual item stays selected)
+        //   false = keep CDIS_SELECTED, rely on clrTextBk being honored.
+        // Flip after visual testing; do not ship unverified.
+        private const bool MaskSelectedStateForDraw = true;
+
+        protected override void WndProc(ref Message m)
+        {
+            // WM_NOTIFY from the inner native ListView reaches this wrapper (its parent).
+            if (m.Msg == NativeCustomDraw.WM_NOTIFY && IsHandleCreated
+                && Enabled && NativeCustomDraw.IsCustomDraw(m.LParam, _list.Handle))
+            {
+                if (HandleListCustomDraw(ref m))
+                    return; // m.Result set — do not pass to base
+            }
+            base.WndProc(ref m);
+        }
+
+        private bool HandleListCustomDraw(ref Message m)
+        {
+            var lvcd = Marshal.PtrToStructure<NMLVCUSTOMDRAW>(m.LParam);
+
+            switch (lvcd.nmcd.dwDrawStage)
+            {
+                case NativeCustomDraw.CDDS_PREPAINT:
+                    // Ask for per-item notifications (covers all columns in Details).
+                    m.Result = (IntPtr)NativeCustomDraw.CDRF_NOTIFYITEMDRAW;
+                    return true;
+
+                case NativeCustomDraw.CDDS_ITEMPREPAINT:
+                    // Ask for per-subitem notifications so every column cell is colored.
+                    m.Result = (IntPtr)(NativeCustomDraw.CDRF_NOTIFYITEMDRAW
+                                       | NativeCustomDraw.CDRF_NOTIFYSUBITEMDRAW);
+                    return true;
+
+                case NativeCustomDraw.CDDS_ITEMPREPAINT_SUBITEM:
+                {
+                    int idx = (int)lvcd.nmcd.dwItemSpec;
+                    bool sel = idx >= 0 && idx < _list.Items.Count && _list.Items[idx].Selected;
+
+                    lvcd.clrTextBk = NativeCustomDraw.ToColorRef(sel ? Colors.BlueSelection : _list.BackColor);
+                    lvcd.clrText = NativeCustomDraw.ToColorRef(sel ? Colors.SelectionText : _list.ForeColor);
+
+                    if (sel && MaskSelectedStateForDraw)
+                        lvcd.nmcd.uItemState &= ~NativeCustomDraw.CDIS_SELECTED;
+
+                    Marshal.StructureToPtr(lvcd, m.LParam, false);
+                    m.Result = (IntPtr)NativeCustomDraw.CDRF_DODEFAULT;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            if (!DesignMode) ApplyThemeColors();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                ThemeManager.ThemeChanged -= OnThemeChanged;
+                _deferTimer?.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e) => ApplyThemeColors();
+
+        private void ApplyThemeColors()
+        {
+            base.BackColor = Colors.LightBorder;
+            _list.BackColor = Colors.GreyBackground;
+            _list.ForeColor = Colors.LightText;
+            _vScrollBar.BackColor = Colors.MediumBackground;
+            _hScrollBar.BackColor = Colors.MediumBackground;
+            Invalidate(true);
+        }
+
+        // ── Designer freeze guard ─────────────────────────────────────
+        // The wrapper's BackColor is the themed BORDER — clamp it so a
+        // serialized value in Designer.cs can never pin it to a stale
+        // color or stop it following ThemeManager.
+        [Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public new Color BackColor
+        {
+            get => Colors.LightBorder;
+            set => base.BackColor = Colors.LightBorder;
+        }
+
         protected override void OnEnabledChanged(EventArgs e)
         {
             base.OnEnabledChanged(e);
@@ -245,12 +366,6 @@ namespace DarkUI.Controls
             _list.BackColor = Colors.GreyBackground;
             _list.ForeColor = Colors.LightText;
             _list.Invalidate();
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing) _deferTimer?.Dispose();
-            base.Dispose(disposing);
         }
 
         public void RefreshLayout()

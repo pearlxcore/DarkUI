@@ -141,7 +141,16 @@ namespace DarkUI.Controls
                      ControlStyles.OptimizedDoubleBuffer |
                      ControlStyles.ResizeRedraw |
                      ControlStyles.UserPaint, true);
+            ThemeManager.ThemeChanged += OnThemeChanged;
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ThemeManager.ThemeChanged -= OnThemeChanged;
+            base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e) => Invalidate();
 
         #endregion
 
@@ -324,7 +333,9 @@ namespace DarkUI.Controls
                         break;
                     case DarkControlState.Pressed:
                         borderColor = Colors.GreyHighlight;
-                        fillColor = Colors.GreySelection;
+                        // GreySelection was nearly invisible against the
+                        // GreyBackground box — use the brighter accent.
+                        fillColor = Colors.GreyHighlight;
                         break;
                 }
             }
@@ -332,7 +343,7 @@ namespace DarkUI.Controls
             {
                 textColor = Colors.DisabledText;
                 borderColor = Colors.GreyHighlight;
-                fillColor = Colors.GreySelection;
+                fillColor = Colors.GreyHighlight;
             }
 
             using (var b = new SolidBrush(Colors.GreyBackground))

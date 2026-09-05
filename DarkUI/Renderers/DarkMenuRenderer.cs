@@ -25,7 +25,7 @@ namespace DarkUI.Renderers
             item.BackColor = Colors.GreyBackground;
             item.ForeColor = Colors.LightText;
 
-            if (item.GetType() == typeof(ToolStripSeparator))
+            if (item is ToolStripSeparator)
             {
                 item.Margin = new Padding(0, 0, 0, 1);
             }
@@ -94,7 +94,7 @@ namespace DarkUI.Renderers
 
         protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
         {
-            e.ArrowColor = Colors.LightText;
+            e.ArrowColor = e.Item.Enabled ? Colors.LightText : Colors.DisabledText;
             e.ArrowRectangle = new Rectangle(new Point(e.ArrowRectangle.Left, e.ArrowRectangle.Top - 1), e.ArrowRectangle.Size);
 
             base.OnRenderArrow(e);

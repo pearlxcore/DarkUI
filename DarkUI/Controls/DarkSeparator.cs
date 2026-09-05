@@ -1,4 +1,5 @@
 ﻿using DarkUI.Config;
+using System;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -14,7 +15,17 @@ namespace DarkUI.Controls
 
             Dock = DockStyle.Top;
             Size = new Size(1, 2);
+
+            ThemeManager.ThemeChanged += OnThemeChanged;
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ThemeManager.ThemeChanged -= OnThemeChanged;
+            base.Dispose(disposing);
+        }
+
+        private void OnThemeChanged(object sender, EventArgs e) => Invalidate();
 
         #endregion
 

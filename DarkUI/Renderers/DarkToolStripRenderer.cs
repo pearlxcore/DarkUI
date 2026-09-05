@@ -14,9 +14,8 @@ namespace DarkUI.Renderers
         {
             base.InitializeItem(item);
 
-            if (item.GetType() == typeof(ToolStripSeparator))
+            if (item is ToolStripSeparator castItem)
             {
-                var castItem = (ToolStripSeparator)item;
                 if (!castItem.IsOnDropDown)
                     item.Margin = new Padding(0, 0, 2, 0);
             }
@@ -60,7 +59,7 @@ namespace DarkUI.Renderers
 
             var rect = new Rectangle(0, 1, e.Item.Width, e.Item.Height - 2);
 
-            if (e.Item.Selected || e.Item.Pressed)
+            if ((e.Item.Selected || e.Item.Pressed) && e.Item.Enabled)
             {
                 using (var b = new SolidBrush(Colors.GreySelection))
                 {
@@ -103,13 +102,26 @@ namespace DarkUI.Renderers
 
             var rect = new Rectangle(0, 1, e.Item.Width, e.Item.Height - 2);
 
-            if (e.Item.Selected || e.Item.Pressed)
+            if ((e.Item.Selected || e.Item.Pressed) && e.Item.Enabled)
             {
                 using (var b = new SolidBrush(Colors.GreySelection))
                 {
                     g.FillRectangle(b, rect);
                 }
             }
+        }
+
+        protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+        {
+            // Disabled items must use the theme's DisabledText — the base
+            // renderer falls back to SystemColors.GrayText.
+            if (!e.Item.Enabled)
+            {
+                TextRenderer.DrawText(e.Graphics, e.Text, e.TextFont, e.TextRectangle,
+                    Colors.DisabledText, e.TextFormat);
+                return;
+            }
+            base.OnRenderItemText(e);
         }
 
         protected override void OnRenderGrip(ToolStripGripRenderEventArgs e)
