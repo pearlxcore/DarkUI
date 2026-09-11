@@ -132,6 +132,7 @@ namespace DarkUI.Controls
         {
             SetStyle(ControlStyles.SupportsTransparentBackColor |
                      ControlStyles.OptimizedDoubleBuffer |
+                     ControlStyles.AllPaintingInWmPaint |
                      ControlStyles.ResizeRedraw |
                      ControlStyles.UserPaint, true);
             ThemeManager.ThemeChanged += OnThemeChanged;
@@ -250,6 +251,21 @@ namespace DarkUI.Controls
 
         #region Paint Region
 
+        private Color ResolveBackgroundColor()
+        {
+            Color color = BackColor;
+            if (color.A == 255)
+                return color;
+
+            for (Control parent = Parent; parent != null; parent = parent.Parent)
+            {
+                color = parent.BackColor;
+                if (color.A == 255)
+                    return color;
+            }
+            return Colors.GreyBackground;
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
@@ -289,10 +305,11 @@ namespace DarkUI.Controls
                 fillColor = Colors.GreyHighlight;
             }
 
-            using (var b = new SolidBrush(Colors.GreyBackground))
-            {
+            // An ambient Transparent BackColor (from a transparent parent)
+            // must not leave the control un-erased; resolve the first opaque
+            // ancestor surface so it blends without transparent-repaint artifacts.
+            using (var b = new SolidBrush(ResolveBackgroundColor()))
                 g.FillRectangle(b, rect);
-            }
 
             g.SmoothingMode = SmoothingMode.HighQuality;
 

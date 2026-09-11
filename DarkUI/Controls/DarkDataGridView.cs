@@ -13,7 +13,7 @@ using static System.Windows.Forms.DataGridView;
 
 namespace DarkUI.Controls
 {
-    public class DarkDataGridView : UserControl, ISupportInitialize
+    public partial class DarkDataGridView : UserControl, ISupportInitialize
     {
         private class DragDropMetaData { }
 
@@ -138,6 +138,7 @@ namespace DarkUI.Controls
             Controls.Add(_vScrollBar);
             Controls.Add(_hScrollBar);
             ThemeManager.ThemeChanged += OnThemeChanged;
+            InitGrouping();
         }
 
         protected override void Dispose(bool disposing)
@@ -203,6 +204,9 @@ namespace DarkUI.Controls
 
         private void BaseKeyDown(object sender, KeyEventArgs e)
         {
+            if (HandleGroupNavigation(e))
+                return;
+
             if (e.KeyCode == Keys.V && e.Modifiers == Keys.Control && AllowUserToPasteCells)
             {
                 string clipboardString = Clipboard.GetDataObject()?.GetData(DataFormats.UnicodeText) as string;
@@ -419,8 +423,15 @@ namespace DarkUI.Controls
 
         private void _vScrollBar_ValueChanged(object sender, ScrollValueEventArgs e)
         {
-            if (_base.Rows.Count != 0)
-                _base.FirstDisplayedScrollingRowIndex = Math.Max(0, Math.Min(Math.Max(_base.Rows.Count - 1, 0), e.Value));
+            if (_base.Rows.Count == 0)
+                return;
+
+            // Collapsed group rows are hidden; the first displayed row must be visible.
+            int target = Math.Max(0, Math.Min(_base.Rows.Count - 1, e.Value));
+            while (target < _base.Rows.Count && !_base.Rows[target].Visible)
+                target++;
+            if (target < _base.Rows.Count)
+                _base.FirstDisplayedScrollingRowIndex = target;
         }
 
         private void BaseScrolled(object sender, ScrollEventArgs e)
@@ -471,7 +482,7 @@ namespace DarkUI.Controls
 
         private void UpdateScrollBarLayout()
         {
-            if (_isInit || _updateScrollBarLayout) // Don't update recursively
+            if (_isInit || _updating || _updateScrollBarLayout) // Don't update recursively
                 return;
 
             try
@@ -1047,7 +1058,19 @@ namespace DarkUI.Controls
         public new void ResetText() { _base.ResetText(); }
         public void SelectAll() { _base.SelectAll(); }
         public void Sort(IComparer comparer) { _base.Sort(comparer); }
-        public void Sort(DataGridViewColumn dataGridViewColumn, ListSortDirection direction) { _base.Sort(dataGridViewColumn, direction); }
+        public void Sort(DataGridViewColumn dataGridViewColumn, ListSortDirection direction)
+        {
+            // With grouping active, the built-in sort would scatter the group
+            // header rows. Route through the group-aware sorter instead.
+            if (_groupRows.Count > 0 && dataGridViewColumn != null)
+            {
+                _sortColumnIndex = dataGridViewColumn.Index;
+                _sortAscending = direction == ListSortDirection.Ascending;
+                SortGroupsInternal(dataGridViewColumn.Index, direction, true);
+                return;
+            }
+            _base.Sort(dataGridViewColumn, direction);
+        }
         public void UpdateCellErrorText(int columnIndex, int rowIndex) { _base.UpdateCellErrorText(columnIndex, rowIndex); }
         public void UpdateCellValue(int columnIndex, int rowIndex) { _base.UpdateCellValue(columnIndex, rowIndex); }
         public void UpdateRowErrorText(int rowIndex) { _base.UpdateRowErrorText(rowIndex); }
