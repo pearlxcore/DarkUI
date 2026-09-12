@@ -76,6 +76,12 @@ namespace DarkUI.Controls
             _rtb.TextChanged += (s, e) => { UpdateScrollBars(); OnTextChanged(e); };
             _rtb.VScroll += (s, e) => QueueScrollSync();
             _rtb.HScroll += (s, e) => QueueScrollSync();
+            // The hosted RichEdit can create its handle long after this
+            // wrapper reached its final size (e.g. a control on a tab page
+            // that only becomes visible when the user selects it). No resize
+            // follows in that case, so size the native box the moment its
+            // handle exists instead of leaving it at its default bounds.
+            _rtb.HandleCreated += (s, e) => UpdateScrollBars();
 
             _vScrollBar.BackColor = Colors.MediumBackground;
             _vScrollBar.ValueChanged += VScrollBar_ValueChanged;
@@ -124,6 +130,15 @@ namespace DarkUI.Controls
         {
             base.OnHandleCreated(e);
             if (!DesignMode)
+                UpdateScrollBars();
+        }
+
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+            // Becoming visible can create the inner RichEdit handle without a
+            // subsequent resize; re-run layout so it fills the wrapper.
+            if (Visible)
                 UpdateScrollBars();
         }
 
