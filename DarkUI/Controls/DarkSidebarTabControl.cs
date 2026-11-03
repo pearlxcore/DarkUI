@@ -218,6 +218,10 @@ namespace DarkUI.Controls
             page.TextChanged -= PageLabelChanged;
             page.SidebarOwner = null;
             base.Controls.Remove(page);
+            // Keep the anchor snapshot from rooting detached children.
+            foreach (Control c in page.Controls)
+                _anchorMargins.Remove(c);
+            _anchorMargins.Remove(page);
         }
 
         internal void RemoveSidebarItem(int index)
@@ -245,16 +249,20 @@ namespace DarkUI.Controls
         {
             base.OnLayout(e);
 
+            // _sidebarWidth is stored in 96-DPI design units (the designer
+            // serializes e.g. 140) — layout uses the DPI-scaled value.
+            int sidebarWidth = (int)Math.Round(_sidebarWidth * DeviceDpi / 96f);
+
             var pageBounds = new Rectangle(
-                _sidebarWidth,
+                sidebarWidth,
                 0,
-                Math.Max(0, ClientSize.Width - _sidebarWidth),
+                Math.Max(0, ClientSize.Width - sidebarWidth),
                 ClientSize.Height);
 
             _sidebar.Bounds = new Rectangle(
             0,
             0,
-            Math.Max(0, _sidebarWidth - 1),
+            Math.Max(0, sidebarWidth - 1),
             ClientSize.Height);
 
             _sidebarDivider.Bounds = new Rectangle(_sidebar.Width, 0, 1, ClientSize.Height);
@@ -264,6 +272,144 @@ namespace DarkUI.Controls
                 foreach (SidebarPage page in _pages)
                     page.Bounds = pageBounds;
             }
+        }
+
+        // ── Anchor margin baseline ─────────────────────────────────────
+        // The owning form's DPI scale pass resizes page children directly
+        // and refreshes anchor margins only for the page that is visible
+        // at the time — children on hidden pages keep stale margins and
+        // come out mispositioned/overlapping when their page is shown.
+        // Each child's edge insets are snapshotted and re-applied on page
+        // selection, but only for the edges the child's Anchor actually
+        // pins: a Top|Left-anchored button keeps its designed size, a
+        // Top|Bottom|Left|Right-anchored panel keeps filling the page.
+        // Snapshots are refreshed when a page is hidden (so runtime
+        // repositioning done while visible is preserved) and re-taken
+        // after every DPI change (so stored pixels never go stale).
+
+        private readonly Dictionary<Control, Rectangle> _anchorMargins = new();
+        private bool _anchorMarginsCaptured;
+
+        private void CaptureAnchorMargins()
+        {
+            if (DesignMode || _pages == null) return;
+            PruneAnchorMargins();
+            foreach (SidebarPage page in _pages)
+                CaptureAnchorMarginsForPage(page);
+            _anchorMarginsCaptured = true;
+        }
+
+        private void CaptureAnchorMarginsForPage(SidebarPage page)
+        {
+            if (page is null) return;
+            int pageWidth = Math.Max(1, page.ClientSize.Width);
+            int pageHeight = Math.Max(1, page.ClientSize.Height);
+            foreach (Control c in page.Controls)
+            {
+                if (c.IsDisposed || c.Dock != DockStyle.None || c.AutoSize) continue;
+                _anchorMargins[c] = new Rectangle(
+                    c.Left, c.Top,
+                    Math.Max(0, pageWidth - c.Right),
+                    Math.Max(0, pageHeight - c.Bottom));
+            }
+        }
+
+        private void PruneAnchorMargins()
+        {
+            List<Control> dead = null;
+            foreach (var kvp in _anchorMargins)
+            {
+                if (kvp.Key.IsDisposed || kvp.Key.Parent == null)
+                    (dead ??= new List<Control>()).Add(kvp.Key);
+            }
+            if (dead != null)
+                foreach (var c in dead)
+                    _anchorMargins.Remove(c);
+        }
+
+        private void ApplyAnchorMargins(SidebarPage page)
+        {
+            if (!_anchorMarginsCaptured || page is null) return;
+            PruneAnchorMargins();
+            int pageWidth = Math.Max(1, page.ClientSize.Width);
+            int pageHeight = Math.Max(1, page.ClientSize.Height);
+            foreach (Control c in page.Controls)
+            {
+                // Docked and AutoSize controls manage their own bounds.
+                if (c.IsDisposed || c.Dock != DockStyle.None || c.AutoSize) continue;
+                if (!_anchorMargins.TryGetValue(c, out var m))
+                {
+                    int pw = pageWidth, ph = pageHeight;
+                    _anchorMargins[c] = new Rectangle(
+                        c.Left, c.Top,
+                        Math.Max(0, pw - c.Right),
+                        Math.Max(0, ph - c.Bottom));
+                    continue;
+                }
+                // The snapshot stores insets in Width/Height (Right inset,
+                // Bottom inset). Rectangle.Right/Bottom are absolute edges
+                // (X+Width, Y+Height) — reading them here subtracted each
+                // child's own Left/Top a second time, shrinking every panel
+                // by its offset from the page origin on each page re-entry.
+                // Only the edges this child actually anchors are enforced;
+                // unanchored edges keep the child's current geometry.
+                AnchorStyles a = c.Anchor;
+                int left = (a & AnchorStyles.Left) != 0 ? m.X : c.Left;
+                int top = (a & AnchorStyles.Top) != 0 ? m.Y : c.Top;
+                int rightInset = (a & AnchorStyles.Right) != 0 ? m.Width : pageWidth - c.Right;
+                int bottomInset = (a & AnchorStyles.Bottom) != 0 ? m.Height : pageHeight - c.Bottom;
+                int width = pageWidth - left - rightInset;
+                int height = pageHeight - top - bottomInset;
+                if (width > 0 && height > 0)
+                    c.Bounds = new Rectangle(left, top, width, height);
+            }
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            ApplyDpiMetrics();
+            // The child's DPI context settles shortly after handle creation.
+            BeginInvoke(ApplyDpiMetrics);
+            // Defer until the owning form's DPI scale pass has fully landed,
+            // then snapshot every page child's anchor margins and re-apply
+            // them — hidden pages would otherwise come out mispositioned.
+            BeginInvoke(() =>
+            {
+                if (Disposing || !IsHandleCreated) return;
+                CaptureAnchorMargins();
+                if (SelectedPage != null) ApplyAnchorMargins(SelectedPage);
+                // Partial invalidation leaves stale pixels from the pre-scale
+                // layout on screen (stray text fragments, off-center arrows).
+                Invalidate(true);
+                foreach (SidebarPage page in _pages)
+                    page.Invalidate(true);
+            });
+        }
+
+        protected override void OnDpiChangedAfterParent(EventArgs e)
+        {
+            base.OnDpiChangedAfterParent(e);
+            ApplyDpiMetrics();
+            // The form's scale pass lands asynchronously and resizes page
+            // children; re-snapshot every child at the new DPI instead of
+            // re-applying margins stored in old-DPI pixels.
+            _anchorMarginsCaptured = false;
+            _anchorMargins.Clear();
+            BeginInvoke(() =>
+            {
+                if (Disposing || !IsHandleCreated) return;
+                CaptureAnchorMargins();
+                if (SelectedPage != null) ApplyAnchorMargins(SelectedPage);
+            });
+        }
+
+        // Item heights and other fixed metrics follow the real DPI; a layout
+        // pass picks up the scaled sidebar width afterwards.
+        private void ApplyDpiMetrics()
+        {
+            _sidebar.ItemHeight = (int)Math.Round(22 * DeviceDpi / 96f);
+            PerformLayout();
         }
 
         #region Selection
@@ -276,7 +422,7 @@ namespace DarkUI.Controls
 
             _resizingSidebar = true;
             _resizeStartScreenX = MousePosition.X;
-            _resizeStartWidth = _sidebarWidth;
+            _resizeStartWidth = (int)Math.Round(_sidebarWidth * DeviceDpi / 96f);
             _sidebar.Capture = true;
             SidebarResizeStarted?.Invoke(this, EventArgs.Empty);
         }
@@ -292,11 +438,14 @@ namespace DarkUI.Controls
                 return;
             }
 
-            int maximum = Math.Max(60, ClientSize.Width - 60);
-            SidebarWidth = Math.Clamp(
+            int scale = DeviceDpi;
+            int minimum = (int)Math.Round(60f * scale / 96f);
+            int maximum = Math.Max(minimum, ClientSize.Width - minimum);
+            int physical = Math.Clamp(
                 _resizeStartWidth + MousePosition.X - _resizeStartScreenX,
-                60,
+                minimum,
                 maximum);
+            SidebarWidth = (int)Math.Round(physical * 96f / scale);
         }
 
         private void SidebarMouseUp(object sender, MouseEventArgs e)
@@ -309,7 +458,9 @@ namespace DarkUI.Controls
             SidebarResizeCompleted?.Invoke(this, EventArgs.Empty);
         }
 
-        private const int SidebarResizeGripWidth = 6;
+        // The drag-grip hit zone, in device pixels: scale it like every other
+        // metric so the grip stays proportionally easy to grab at high DPI.
+        private int SidebarResizeGripWidth => (int)Math.Round(6 * DeviceDpi / 96f);
 
         private void SyncSelection()
         {
@@ -327,8 +478,18 @@ namespace DarkUI.Controls
         internal void SetCurrent(int idx)
         {
             if (idx == _current) return;
+            // Refresh the snapshot of the page being hidden first: its
+            // children are at their live positions, so any runtime
+            // repositioning done while it was visible is preserved.
+            var hiding = _current >= 0 && _current < _pages.Count ? _pages[_current] : null;
+            if (hiding != null && _anchorMarginsCaptured)
+                CaptureAnchorMarginsForPage(hiding);
             _current = idx;
             ShowPageAt(idx);
+            CaptureAnchorMargins();
+            var page = idx >= 0 && idx < _pages.Count ? _pages[idx] : null;
+            if (page != null) ApplyAnchorMargins(page);
+            page?.Invalidate(true);
             SelectedIndexChanged?.Invoke(this, EventArgs.Empty);
         }
 

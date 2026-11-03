@@ -1,5 +1,6 @@
 using DarkUI.Config;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.Windows.Forms;
@@ -65,7 +66,16 @@ namespace DarkUI.Controls
         [Browsable(false)]
         public Rectangle ContentBounds => GetContentBounds();
 
-        internal int HeaderHeight => string.IsNullOrEmpty(_sectionHeader) ? 0 : DefaultHeaderHeight;
+        internal int HeaderHeight =>
+            string.IsNullOrEmpty(_sectionHeader) ? 0 : (int)Math.Round(DefaultHeaderHeight * DeviceDpi / 96f);
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            // Partial invalidation leaves stale pixels from the pre-scale
+            // layout on screen (stray header-text fragments).
+            Invalidate(true);
+        }
 
         public DarkSectionPanel()
         {
@@ -73,6 +83,15 @@ namespace DarkUI.Controls
                      ControlStyles.ResizeRedraw |
                      ControlStyles.UserPaint, true);
             base.Margin = new Padding(6);
+            // Child layout stays framework-driven: base.Padding insets the
+            // dock/anchor display rectangle below the painted header for ALL
+            // dock styles (Top/Left/Right/Bottom/Fill) and anchored children,
+            // exactly like upstream. ApplyEffectivePadding stores DESIGN
+            // units — the framework's DPI scaling multiplies Padding along
+            // with the children, so the layout inset and the (separately
+            // scaled) painted header height always agree. Never re-apply
+            // already-scaled padding here or on DPI change: the framework
+            // scales Padding itself, and scaling it twice doubles it.
             ApplyEffectivePadding();
             ThemeManager.ThemeChanged += OnThemeChanged;
         }
@@ -87,11 +106,32 @@ namespace DarkUI.Controls
 
         internal Rectangle GetContentBounds()
         {
-            var left = BorderThickness + _contentPadding.Left;
-            var top = (HeaderHeight > 0 ? HeaderHeight : BorderThickness) + _contentPadding.Top;
-            var right = Math.Max(left, ClientSize.Width - BorderThickness - _contentPadding.Right);
-            var bottom = Math.Max(top, ClientSize.Height - BorderThickness - _contentPadding.Bottom);
+            // Content padding is authored in 96-DPI design units; scale it
+            // like every other metric.
+            double scale = DeviceDpi / 96.0;
+            int S(int v) => (int)Math.Round(v * scale);
+            var left = BorderThickness + S(_contentPadding.Left);
+            var top = (HeaderHeight > 0 ? HeaderHeight : BorderThickness) + S(_contentPadding.Top);
+            var right = Math.Max(left, ClientSize.Width - BorderThickness - S(_contentPadding.Right));
+            var bottom = Math.Max(top, ClientSize.Height - BorderThickness - S(_contentPadding.Bottom));
             return Rectangle.FromLTRB(left, top, right, bottom);
+        }
+
+        /// <summary>
+        /// Insets the framework's layout rectangle below the painted header
+        /// plus the designer content padding, so every dock style and
+        /// anchored child respects the header. Stored in 96-DPI DESIGN
+        /// units: the framework's DPI scaling multiplies Padding together
+        /// with the children, keeping the layout inset and the (separately
+        /// scaled) painted header height in agreement at every DPI.
+        /// </summary>
+        private void ApplyEffectivePadding()
+        {
+            base.Padding = new Padding(
+                BorderThickness + _contentPadding.Left,
+                (HeaderHeight > 0 ? DefaultHeaderHeight : BorderThickness) + _contentPadding.Top,
+                BorderThickness + _contentPadding.Right,
+                BorderThickness + _contentPadding.Bottom);
         }
 
         protected override void OnEnter(EventArgs e)
@@ -204,15 +244,6 @@ namespace DarkUI.Controls
         protected override void OnPaintBackground(PaintEventArgs e)
         {
             // Absorb event.
-        }
-
-        private void ApplyEffectivePadding()
-        {
-            base.Padding = new Padding(
-                BorderThickness + _contentPadding.Left,
-                (HeaderHeight > 0 ? HeaderHeight : BorderThickness) + _contentPadding.Top,
-                BorderThickness + _contentPadding.Right,
-                BorderThickness + _contentPadding.Bottom);
         }
 
         private static Color GetFocusedHeaderTextColor(Color background)

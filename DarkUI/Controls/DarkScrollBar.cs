@@ -1,4 +1,4 @@
-﻿using DarkUI.Config;
+using DarkUI.Config;
 using System;
 using System.ComponentModel;
 using System.Drawing;
@@ -397,17 +397,18 @@ namespace DarkUI.Controls
         public void UpdateScrollBar()
         {
             var area = ClientRectangle;
+            int arrowSize = DpiHelper.Scale(this, Consts.ArrowButtonSize);
 
             // Arrow buttons
             switch (_scrollOrientation)
             {
                 case DarkScrollOrientation.Vertical:
-                    _upArrowArea = new Rectangle(area.Left, area.Top, Consts.ArrowButtonSize, Consts.ArrowButtonSize);
-                    _downArrowArea = new Rectangle(area.Left, area.Bottom - Consts.ArrowButtonSize, Consts.ArrowButtonSize, Consts.ArrowButtonSize);
+                    _upArrowArea = new Rectangle(area.Left, area.Top, arrowSize, arrowSize);
+                    _downArrowArea = new Rectangle(area.Left, area.Bottom - arrowSize, arrowSize, arrowSize);
                     break;
                 case DarkScrollOrientation.Horizontal:
-                    _upArrowArea = new Rectangle(area.Left, area.Top, Consts.ArrowButtonSize, Consts.ArrowButtonSize);
-                    _downArrowArea = new Rectangle(area.Right - Consts.ArrowButtonSize, area.Top, Consts.ArrowButtonSize, Consts.ArrowButtonSize);
+                    _upArrowArea = new Rectangle(area.Left, area.Top, arrowSize, arrowSize);
+                    _downArrowArea = new Rectangle(area.Right - arrowSize, area.Top, arrowSize, arrowSize);
                     break;
             }
 
@@ -415,10 +416,10 @@ namespace DarkUI.Controls
             switch (_scrollOrientation)
             {
                 case DarkScrollOrientation.Vertical:
-                    _trackArea = new Rectangle(area.Left, area.Top + Consts.ArrowButtonSize, area.Width, area.Height - Consts.ArrowButtonSize * 2);
+                    _trackArea = new Rectangle(area.Left, area.Top + arrowSize, area.Width, area.Height - arrowSize * 2);
                     break;
                 case DarkScrollOrientation.Horizontal:
-                    _trackArea = new Rectangle(area.Left + Consts.ArrowButtonSize, area.Top, area.Width - Consts.ArrowButtonSize * 2, area.Height);
+                    _trackArea = new Rectangle(area.Left + arrowSize, area.Top, area.Width - arrowSize * 2, area.Height);
                     break;
             }
 
@@ -432,6 +433,11 @@ namespace DarkUI.Controls
         {
             if (ViewSize >= Maximum)
                 return;
+
+            int scrollSize = DpiHelper.Scale(this, Consts.ScrollBarSize);
+            int minThumbSize = DpiHelper.Scale(this, Consts.MinimumThumbSize);
+            // Inset between the track edge and the thumb, scaled with the rest.
+            int thumbInset = DpiHelper.Scale(this, 3);
 
             // Cap to maximum value
             var maximumValue = Maximum - ViewSize;
@@ -450,26 +456,26 @@ namespace DarkUI.Controls
                     {
                         var thumbSize = (int)(_trackArea.Height * _viewContentRatio);
 
-                        if (thumbSize < Consts.MinimumThumbSize)
-                            thumbSize = Consts.MinimumThumbSize;
+                        if (thumbSize < minThumbSize)
+                            thumbSize = minThumbSize;
 
                         var trackAreaSize = _trackArea.Height - thumbSize;
                         var thumbPosition = (int)(trackAreaSize * positionRatio);
 
-                        _thumbArea = new Rectangle(_trackArea.Left + 3, _trackArea.Top + thumbPosition, Consts.ScrollBarSize - 6, thumbSize);
+                        _thumbArea = new Rectangle(_trackArea.Left + thumbInset, _trackArea.Top + thumbPosition, scrollSize - thumbInset * 2, thumbSize);
                         break;
                     }
                 case DarkScrollOrientation.Horizontal:
                     {
                         var thumbSize = (int)(_trackArea.Width * _viewContentRatio);
 
-                        if (thumbSize < Consts.MinimumThumbSize)
-                            thumbSize = Consts.MinimumThumbSize;
+                        if (thumbSize < minThumbSize)
+                            thumbSize = minThumbSize;
 
                         var trackAreaSize = _trackArea.Width - thumbSize;
                         var thumbPosition = (int)(trackAreaSize * positionRatio);
 
-                        _thumbArea = new Rectangle(_trackArea.Left + thumbPosition, _trackArea.Top + 3, thumbSize, Consts.ScrollBarSize - 6);
+                        _thumbArea = new Rectangle(_trackArea.Left + thumbPosition, _trackArea.Top + thumbInset, thumbSize, scrollSize - thumbInset * 2);
                         break;
                     }
             }
@@ -503,43 +509,34 @@ namespace DarkUI.Controls
             }*/
 
             // Up arrow
-            var upIcon = _upArrowHot ? ScrollIcons.scrollbar_arrow_hot : ScrollIcons.scrollbar_arrow_standard;
+            var upColor = _upArrowHot ? ArrowColorHot : ArrowColorStandard;
 
             if (_upArrowClicked)
-                upIcon = ScrollIcons.scrollbar_arrow_clicked;
+                upColor = ArrowColorClicked;
 
             if (!Enabled)
-                upIcon = ScrollIcons.scrollbar_arrow_disabled;
+                upColor = ArrowColorDisabled;
 
-            switch (_scrollOrientation)
-            {
-                case DarkScrollOrientation.Vertical:
-                    upIcon.RotateFlip(RotateFlipType.RotateNoneFlipY);
-                    break;
-                case DarkScrollOrientation.Horizontal:
-                    upIcon.RotateFlip(RotateFlipType.Rotate90FlipNone);
-                    break;
-            }
+            var upDirection = _scrollOrientation == DarkScrollOrientation.Vertical
+                ? ScrollArrowDirection.Up
+                : ScrollArrowDirection.Left;
 
-            g.DrawImage(upIcon,
-                                _upArrowArea.Left + _upArrowArea.Width / 2 - upIcon.Width / 2,
-                                _upArrowArea.Top + _upArrowArea.Height / 2 - upIcon.Height / 2);
+            DrawArrowGlyph(g, _upArrowArea, upDirection, upColor);
 
             // Down arrow
-            var downIcon = _downArrowHot ? ScrollIcons.scrollbar_arrow_hot : ScrollIcons.scrollbar_arrow_standard;
+            var downColor = _downArrowHot ? ArrowColorHot : ArrowColorStandard;
 
             if (_downArrowClicked)
-                downIcon = ScrollIcons.scrollbar_arrow_clicked;
+                downColor = ArrowColorClicked;
 
             if (!Enabled)
-                downIcon = ScrollIcons.scrollbar_arrow_disabled;
+                downColor = ArrowColorDisabled;
 
-            if (_scrollOrientation == DarkScrollOrientation.Horizontal)
-                downIcon.RotateFlip(RotateFlipType.Rotate270FlipNone);
+            var downDirection = _scrollOrientation == DarkScrollOrientation.Vertical
+                ? ScrollArrowDirection.Down
+                : ScrollArrowDirection.Right;
 
-            g.DrawImage(downIcon,
-                                _downArrowArea.Left + _downArrowArea.Width / 2 - downIcon.Width / 2,
-                                _downArrowArea.Top + _downArrowArea.Height / 2 - downIcon.Height / 2);
+            DrawArrowGlyph(g, _downArrowArea, downDirection, downColor);
 
             // Draw thumb
             if (!Enabled)
@@ -557,5 +554,68 @@ namespace DarkUI.Controls
         }
 
         #endregion
+
+        #region Arrow Glyph Region
+
+        private enum ScrollArrowDirection
+        {
+            Up,
+            Down,
+            Left,
+            Right
+        }
+
+        // State colors matching the retired 9×5 arrow bitmaps, so the look is
+        // unchanged apart from crispness.
+        private static readonly Color ArrowColorStandard = Color.FromArgb(92, 92, 92);
+        private static readonly Color ArrowColorHot = Color.FromArgb(122, 128, 132);
+        private static readonly Color ArrowColorClicked = Color.FromArgb(159, 178, 196);
+        private static readonly Color ArrowColorDisabled = Color.FromArgb(68, 71, 73);
+
+        // Glyph proportions from the retired 9×5 bitmaps relative to their
+        // 15-unit button: ~60% of the button across, ~36% tall.
+        private static void DrawArrowGlyph(Graphics g, Rectangle area, ScrollArrowDirection direction, Color color)
+        {
+            float cx = area.Left + area.Width / 2f;
+            float cy = area.Top + area.Height / 2f;
+            float halfW = area.Width * 0.30f;
+            float halfH = area.Height * 0.18f;
+
+            PointF tip, baseA, baseB;
+            switch (direction)
+            {
+                case ScrollArrowDirection.Up:
+                    tip = new PointF(cx, cy - halfH);
+                    baseA = new PointF(cx - halfW, cy + halfH);
+                    baseB = new PointF(cx + halfW, cy + halfH);
+                    break;
+                case ScrollArrowDirection.Left:
+                    tip = new PointF(cx - halfW, cy);
+                    baseA = new PointF(cx + halfW, cy - halfH);
+                    baseB = new PointF(cx + halfW, cy + halfH);
+                    break;
+                case ScrollArrowDirection.Right:
+                    tip = new PointF(cx + halfW, cy);
+                    baseA = new PointF(cx - halfW, cy - halfH);
+                    baseB = new PointF(cx - halfW, cy + halfH);
+                    break;
+                default: // Down
+                    tip = new PointF(cx, cy + halfH);
+                    baseA = new PointF(cx - halfW, cy - halfH);
+                    baseB = new PointF(cx + halfW, cy - halfH);
+                    break;
+            }
+
+            var previousSmoothing = g.SmoothingMode;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using (var b = new SolidBrush(color))
+            {
+                g.FillPolygon(b, new[] { tip, baseA, baseB });
+            }
+            g.SmoothingMode = previousSmoothing;
+        }
+
+        #endregion
     }
 }
+

@@ -38,7 +38,7 @@ namespace DarkUI.Controls
         private bool _updateLayout;
         private int _sortCol = -1;
         private bool _sortAsc = true;
-        private int _scrollSize => Consts.ScrollBarSize;
+        private int _scrollSize => DpiHelper.Scale(this, Consts.ScrollBarSize);
 
         public event EventHandler SelectedItemChanged;
         public event Action<int, string, MouseEventArgs> GroupHeaderClicked;
@@ -178,7 +178,7 @@ namespace DarkUI.Controls
                     int hdrIdx = _base.Rows.Add();
                     _groupRows.Add(hdrIdx);
                     var hdr = _base.Rows[hdrIdx];
-                    hdr.Height = 26;
+                    hdr.Height = (int)Math.Round(26 * DeviceDpi / 96f);
                     hdr.DefaultCellStyle.BackColor = Colors.MediumBackground;
                     hdr.DefaultCellStyle.ForeColor = Colors.LightText;
                     hdr.DefaultCellStyle.SelectionBackColor = Colors.MediumBackground;
@@ -464,7 +464,41 @@ namespace DarkUI.Controls
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            if (!DesignMode) ApplyThemeColors();
+            if (DesignMode) return;
+            ApplyThemeColors();
+            ApplyDpiRowMetrics();
+            // Re-apply once the owning form's DPI scale pass has landed.
+            if (IsHandleCreated && !IsDisposed)
+                BeginInvoke(ApplyDpiRowMetrics);
+        }
+
+        protected override void OnDpiChangedAfterParent(EventArgs e)
+        {
+            base.OnDpiChangedAfterParent(e);
+            ApplyDpiRowMetrics();
+        }
+
+        // Row and group-header heights are 96-DPI design units; scale them
+        // or rows render half-height on scaled displays. Rows added before
+        // the handle existed (a hidden tab page populates lazily) captured
+        // the unscaled template, so re-apply to every existing row too.
+        // Recomputation is absolute, so repeated calls stay idempotent.
+        private void ApplyDpiRowMetrics()
+        {
+            int itemHeight = (int)Math.Round(22 * DeviceDpi / 96f);
+            int headerHeight = (int)Math.Round(26 * DeviceDpi / 96f);
+            bool changed = _base.RowTemplate.Height != itemHeight;
+            _base.RowTemplate.Height = itemHeight;
+            foreach (DataGridViewRow row in _base.Rows)
+            {
+                int desired = _groupRows.Contains(row.Index) ? headerHeight : itemHeight;
+                if (row.Height == desired)
+                    continue;
+                row.Height = desired;
+                changed = true;
+            }
+            if (changed)
+                UpdateScrollBarLayout();
         }
 
         private void OnThemeChanged(object sender, EventArgs e) => ApplyThemeColors();
@@ -627,7 +661,7 @@ namespace DarkUI.Controls
                 int hdrIdx = _base.Rows.Add();
                 _groupRows.Add(hdrIdx);
                 var hdr = _base.Rows[hdrIdx];
-                hdr.Height = 26;
+                hdr.Height = (int)Math.Round(26 * DeviceDpi / 96f);
                 hdr.DefaultCellStyle.BackColor = Colors.MediumBackground;
                 hdr.DefaultCellStyle.ForeColor = Colors.LightText;
                 hdr.DefaultCellStyle.SelectionBackColor = Colors.MediumBackground;

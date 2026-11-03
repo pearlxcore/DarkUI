@@ -1,4 +1,4 @@
-﻿using DarkUI.Config;
+using DarkUI.Config;
 using System;
 using System.ComponentModel;
 using System.Drawing;
@@ -19,7 +19,10 @@ namespace DarkUI.Controls
         private bool _isDefault;
         private bool _spacePressed;
 
-        private const int _padding = Consts.Padding / 2;
+        // Design units (5 = half of the 96-DPI Consts.Padding): the owning
+        // form's DPI scaling scales Control.Padding itself — pre-scaling via
+        // Consts would double-scale and shrink the text area to nothing.
+        private const int _padding = 5;
         private int _imagePadding = 5; // Consts.Padding / 2
 
         #endregion
@@ -458,6 +461,9 @@ namespace DarkUI.Controls
 
             if (Image != null)
             {
+                // The image-to-text gap is a 96-DPI design unit value; scale
+                // it like every other metric so it grows with the button.
+                int imagePadding = DpiHelper.Scale(this, ImagePadding);
                 var stringSize = g.MeasureString(Text, Font, rect.Size);
 
                 var x = ClientSize.Width / 2 - Image.Size.Width / 2;
@@ -466,16 +472,16 @@ namespace DarkUI.Controls
                 switch (TextImageRelation)
                 {
                     case TextImageRelation.ImageAboveText:
-                        textOffsetY = Image.Size.Height / 2 + ImagePadding / 2;
-                        y = y - ((int)(stringSize.Height / 2) + ImagePadding / 2);
+                        textOffsetY = Image.Size.Height / 2 + imagePadding / 2;
+                        y = y - ((int)(stringSize.Height / 2) + imagePadding / 2);
                         break;
                     case TextImageRelation.TextAboveImage:
-                        textOffsetY = (Image.Size.Height / 2 + ImagePadding / 2) * -1;
-                        y = y + (int)(stringSize.Height / 2) + ImagePadding / 2;
+                        textOffsetY = (Image.Size.Height / 2 + imagePadding / 2) * -1;
+                        y = y + (int)(stringSize.Height / 2) + imagePadding / 2;
                         break;
                     case TextImageRelation.ImageBeforeText:
-                        textOffsetX = Image.Size.Width + ImagePadding / 2;
-                        x = ImagePadding;
+                        textOffsetX = Image.Size.Width + imagePadding / 2;
+                        x = imagePadding;
                         break;
                     case TextImageRelation.TextBeforeImage:
                         x = x + (int)stringSize.Width;
@@ -488,31 +494,26 @@ namespace DarkUI.Controls
 
             using (var b = new SolidBrush(textColor))
             {
+                // Vertical centering must span the full client height:
+                // subtracting the scaled padding shrank the text rect below
+                // the scaled font's line box (a 46 px button held a 26 px
+                // rect for a 32 px line at 200%), shaving ascenders and
+                // descenders — 'Expand All' lost its 'p'. The horizontal
+                // inset still keeps wide text off the borders.
                 var modRect = new Rectangle(rect.Left + textOffsetX + Padding.Left,
-                                            rect.Top + textOffsetY + Padding.Top, rect.Width - Padding.Horizontal,
-                                            rect.Height - Padding.Vertical);
+                                            rect.Top + textOffsetY,
+                                            rect.Width - Padding.Horizontal,
+                                            rect.Height);
 
                 if (Image != null)
                 {
-                    var stringFormat = new StringFormat
-                    {
-                        LineAlignment = StringAlignment.Center,
-                        Alignment = StringAlignment.Near,
-                        Trimming = StringTrimming.EllipsisCharacter
-                    };
-
-                    g.DrawString(Text, Font, b, modRect, stringFormat);
+                    TextRenderer.DrawText(g, Text, Font, modRect, textColor,
+                        TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
                 }
                 else
                 {
-                    var stringFormat = new StringFormat
-                    {
-                        LineAlignment = StringAlignment.Center,
-                        Alignment = StringAlignment.Center,
-                        Trimming = StringTrimming.EllipsisCharacter
-                    };
-
-                    g.DrawString(Text, Font, b, modRect, stringFormat);
+                    TextRenderer.DrawText(g, Text, Font, modRect, textColor,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
                 }
             }
         }
