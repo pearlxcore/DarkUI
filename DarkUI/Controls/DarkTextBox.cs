@@ -77,6 +77,14 @@ namespace DarkUI.Controls
             }
         }
 
+        /// <summary>
+        /// Recomputes the themed scrollbars. Call after changing
+        /// <see cref="TextBox.Text"/> or appending text programmatically:
+        /// those paths do not raise the native scroll messages that normally
+        /// refresh the host.
+        /// </summary>
+        public void RefreshScrollBars() => _scrollHost.Update();
+
         #region Constructor Region
 
         public DarkTextBox()
